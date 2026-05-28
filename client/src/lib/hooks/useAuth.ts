@@ -10,6 +10,7 @@ type AuthUser = {
   role?: Role;     // normalized camelCase (e.g. "collegeAdmin")
   rawRole?: string; // raw backend string (e.g. "College Admin") — used for API calls
   message?: string;
+  token?: string;  // JWT — used for Authorization: Bearer in cross-origin requests
 };
 
 export function useAuth() {
@@ -35,6 +36,7 @@ export function useAuth() {
         role: normalizeRole(parsed.role) ?? undefined,
         rawRole: toOptionalString(parsed.role),
         message: toOptionalString(parsed.message),
+        token: toOptionalString(parsed.token),
       });
     } catch {
       setUser(null);

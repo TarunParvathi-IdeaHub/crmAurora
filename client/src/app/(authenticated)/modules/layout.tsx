@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useProfile } from "@/providers/ProfileProvider";
 import type { DashboardProfile } from "@/providers/ProfileProvider";
+import { apiFetch } from "@/lib/utils/apiFetch";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
@@ -43,7 +44,7 @@ export default function ModulesLayout({ children }: ModulesLayoutProps) {
         let profileUrl = `${API_BASE_URL}/api/dashboard/employee/profile`;
         if (user.role === "student") profileUrl = `${API_BASE_URL}/api/dashboard/student/profile`;
 
-        const res = await fetch(profileUrl, { credentials: "include" });
+        const res = await apiFetch(profileUrl);
         const data = (await res.json().catch(() => null)) as
           | { success?: boolean; data?: DashboardProfile }
           | null;

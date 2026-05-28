@@ -6,13 +6,18 @@ import prisma from '../config/database';
 const TOKEN_EXPIRY = '8h';
 const COOKIE_MAX_AGE = 8 * 60 * 60 * 1000; // 8 hours
 
-const buildCookieOptions = (): CookieOptions => ({
-	httpOnly: true,
-	secure: process.env.NODE_ENV === 'production',
-	sameSite: 'strict',
-	maxAge: COOKIE_MAX_AGE,
-	path: '/',
-});
+const buildCookieOptions = (): CookieOptions => {
+	const isProd = process.env.NODE_ENV === 'production';
+	return {
+		httpOnly: true,
+		secure: isProd,
+		// 'none' required for cross-origin (Vercel + Render) in production;
+		// 'lax' is sufficient for same-origin dev
+		sameSite: isProd ? 'none' : 'lax',
+		maxAge: COOKIE_MAX_AGE,
+		path: '/',
+	};
+};
 
 const normalizeCredential = (value: unknown): string => {
 	return typeof value === 'string' ? value.trim() : '';
@@ -96,6 +101,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 		res.status(200).json({
 			message: 'Login successful',
+			token,
 			userId: user.userId,
 			email: user.email,
 			role: user.role,
