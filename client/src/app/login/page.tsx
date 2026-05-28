@@ -46,10 +46,16 @@ export default function LoginPage() {
         return;
       }
 
-      if (data) {
-        localStorage.setItem('erpUser', JSON.stringify(data));
+      // Guard: only navigate when the auth state has actually been persisted.
+      // If data is null (e.g. malformed JSON on a slow connection), navigating
+      // to /dashboard would immediately redirect back to /login because
+      // useAuth reads localStorage and finds nothing.
+      if (!data?.userId && !data?.email) {
+        setError('Login failed: unexpected response from server.');
+        return;
       }
 
+      localStorage.setItem('erpUser', JSON.stringify(data));
       router.push('/dashboard');
     } catch {
       setError('Unable to connect to the backend. Please ensure the server is running.');

@@ -22,7 +22,11 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     if (!isLoading && !isAuthenticated) {
       router.replace("/login");
     }
-  }, [isAuthenticated, isLoading, router]);
+    // router is a stable singleton in Next.js App Router — safe to omit from deps.
+    // Including it caused the effect to re-run on every router reference change,
+    // triggering a redirect before useAuth had a chance to read localStorage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isLoading]);
 
   if (isLoading) {
     return (
