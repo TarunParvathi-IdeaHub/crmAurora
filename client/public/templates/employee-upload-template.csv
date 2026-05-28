@@ -1,0 +1,2 @@
+institutionId,departmentId,firstName,lastName,designation,role,staffType,email,mobileNo,alternateMobileNo,emergencyContact,address,bloodGroup,caste
+<institution_uuid>,<optional_department_uuid>,Ravi,Kumar,Admission Counselor,Admission Counselor,Administrative,ravi.kumar@example.com,9876543210,9876543211,9876543212,"12 Example Street, City",O+,General
