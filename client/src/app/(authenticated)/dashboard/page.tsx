@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import { motion, type Variants } from "framer-motion";
 import type { ComponentType } from "react";
-import { apiFetch } from "@/lib/utils/apiFetch";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
@@ -142,7 +141,7 @@ export default function DashboardPage() {
         if (user.role === "Applicant") profileUrl = `${API_BASE_URL}/api/dashboard/applicant/profile`;
         else if (user.role === "student") profileUrl = `${API_BASE_URL}/api/dashboard/student/profile`;
 
-        const res = await apiFetch(profileUrl);
+        const res = await fetch(profileUrl, { credentials: "include" });
         if (res.status === 401) { localStorage.removeItem("erpUser"); window.location.replace("/login"); return; }
         const data = (await res.json().catch(() => null)) as { success?: boolean; data?: DashboardProfile; error?: string } | null;
         const isProfileMissing =
@@ -167,7 +166,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetch_ = async () => {
       try {
-        const resp = await apiFetch(`${API_BASE_URL}/api/schools`);
+        const resp = await fetch(`${API_BASE_URL}/api/schools`, { credentials: "include" });
         if (resp.ok) {
           const data = (await resp.json()) as { schools: Array<{ id: string; schoolCode: string; name: string; institutionId: string; institutionName: string; institutionCode: string }> };
           setSchools(
