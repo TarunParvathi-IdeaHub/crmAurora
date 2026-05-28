@@ -131,8 +131,12 @@ export default function AdmissionCycleManagementPage() {
         setInstitution(inst);
 
         const [progRes, batchRes, cycleRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/programmes/active/by-institution/${inst.id}`),
-          fetch(`${API_BASE_URL}/api/batches/active/by-institution/${inst.id}`),
+          fetch(`${API_BASE_URL}/api/programmes/active/by-institution/${inst.id}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_BASE_URL}/api/batches/active/by-institution/${inst.id}`, {
+            credentials: "include",
+          }),
           fetch(`${API_BASE_URL}/api/admission-cycles/read`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

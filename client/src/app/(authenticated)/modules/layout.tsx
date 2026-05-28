@@ -8,6 +8,7 @@ import { ROLE_NAMES } from "@/lib/utils/constants";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { authFetch } from "@/lib/utils/authFetch";
 import { useProfile } from "@/providers/ProfileProvider";
 import type { DashboardProfile } from "@/providers/ProfileProvider";
 
@@ -43,7 +44,7 @@ export default function ModulesLayout({ children }: ModulesLayoutProps) {
         let profileUrl = `${API_BASE_URL}/api/dashboard/employee/profile`;
         if (user.role === "student") profileUrl = `${API_BASE_URL}/api/dashboard/student/profile`;
 
-        const res = await fetch(profileUrl, { credentials: "include" });
+        const res = await authFetch(profileUrl);
 
         // 401 means the auth cookie is missing/expired — same handling as dashboard.
         if (res.status === 401) {

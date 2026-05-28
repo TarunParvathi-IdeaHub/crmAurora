@@ -6,6 +6,7 @@ import Badge from "@/components/common/Badge";
 import Card from "@/components/common/Card";
 import { CardSkeleton } from "@/components/common/Loading";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { authFetch } from "@/lib/utils/authFetch";
 import { useProfile, type DashboardProfile } from "@/providers/ProfileProvider";
 import { roleModulesMap, type DashboardModule } from "@/lib/config/dashboardModules";
 import Link from "next/link";
@@ -141,7 +142,7 @@ export default function DashboardPage() {
         if (user.role === "Applicant") profileUrl = `${API_BASE_URL}/api/dashboard/applicant/profile`;
         else if (user.role === "student") profileUrl = `${API_BASE_URL}/api/dashboard/student/profile`;
 
-        const res = await fetch(profileUrl, { credentials: "include" });
+        const res = await authFetch(profileUrl);
         if (res.status === 401) { localStorage.removeItem("erpUser"); window.location.replace("/login"); return; }
         const data = (await res.json().catch(() => null)) as { success?: boolean; data?: DashboardProfile; error?: string } | null;
         const isProfileMissing =
@@ -166,7 +167,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetch_ = async () => {
       try {
-        const resp = await fetch(`${API_BASE_URL}/api/schools`, { credentials: "include" });
+        const resp = await authFetch(`${API_BASE_URL}/api/schools`);
         if (resp.ok) {
           const data = (await resp.json()) as { schools: Array<{ id: string; schoolCode: string; name: string; institutionId: string; institutionName: string; institutionCode: string }> };
           setSchools(

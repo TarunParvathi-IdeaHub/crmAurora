@@ -46,6 +46,7 @@ export default function LoginPage() {
         return;
       }
 
+
       // Guard: only navigate when the auth state has actually been persisted.
       // If data is null (e.g. malformed JSON on a slow connection), navigating
       // to /dashboard would immediately redirect back to /login because
@@ -67,15 +68,15 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen w-full flex overflow-hidden bg-linear-to-br from-[#d4e6fc] via-[#eef4fc] to-[#6099ef]">
       <div className="absolute inset-0 z-0 pointer-events-none">
-        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+        <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
           <circle cx="85%" cy="5%" r="35%" fill="#2b509f" opacity="0.9" />
           <circle cx="95%" cy="20%" r="25%" fill="#4d8df1" opacity="0.9" />
           <circle cx="75%" cy="15%" r="20%" fill="none" stroke="#a3c4f3" strokeWidth="45" opacity="0.7" />
           <circle cx="82%" cy="25%" r="18%" fill="none" stroke="#3664c3" strokeWidth="35" opacity="0.6" />
           <circle cx="90%" cy="10%" r="3%" fill="none" stroke="#a3c4f3" strokeWidth="15" />
           <circle cx="93%" cy="30%" r="2%" fill="none" stroke="#8cb4f5" strokeWidth="12" />
-          <path d="M 50% 100% Q 70% 80%, 100% 70% L 100% 100% Z" fill="#3664c3" opacity="0.9" />
-          <path d="M 60% 100% Q 80% 85%, 100% 80% L 100% 100% Z" fill="#2b509f" />
+          <path d="M 50 100 Q 70 80, 100 70 L 100 100 Z" fill="#3664c3" opacity="0.9" />
+          <path d="M 60 100 Q 80 85, 100 80 L 100 100 Z" fill="#2b509f" />
         </svg>
       </div>
 

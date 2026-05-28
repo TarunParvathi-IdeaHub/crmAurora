@@ -180,7 +180,7 @@ export default function LeadPage() {
     setLoadingInstitutions(true);
     setFetchError('');
 
-    fetch(`${API_BASE}/api/institutions/active`)
+    fetch(`${API_BASE}/api/institutions/active`, { credentials: 'include' })
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load institutions');
         return r.json() as Promise<{ id: string; institutionName: string; institutionCode: string }[]>;
@@ -212,7 +212,7 @@ export default function LeadPage() {
     setLoadingDegreeLevels(true);
     setFetchError('');
 
-    fetch(`${API_BASE}/api/degree-levels/by-institution/${formData.institutionId}`)
+    fetch(`${API_BASE}/api/degree-levels/by-institution/${formData.institutionId}`, { credentials: 'include' })
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load degree levels');
         return r.json() as Promise<{ degreeLevels: { id: string; levelName: string }[] }>;
@@ -244,7 +244,7 @@ export default function LeadPage() {
     setLoadingPrograms(true);
     setFetchError('');
 
-    fetch(`${API_BASE}/api/programme/${formData.institutionId}/${formData.degreeLevelId}`)
+    fetch(`${API_BASE}/api/programme/${formData.institutionId}/${formData.degreeLevelId}`, { credentials: 'include' })
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load programs');
         return r.json() as Promise<{ id: string; programName: string; programSname: string }[]>;
@@ -282,7 +282,7 @@ export default function LeadPage() {
       programId:     formData.programId,
     });
 
-    fetch(`${API_BASE}/api/admission-cycles/latest-active?${params}`)
+    fetch(`${API_BASE}/api/admission-cycles/latest-active?${params}`, { credentials: 'include' })
       .then((r) => {
         if (!r.ok) throw new Error('Admission cycle not found');
         return r.json() as Promise<{ id: string; admissionCycleName: string }>;
@@ -451,6 +451,7 @@ export default function LeadPage() {
       const response = await fetch(`${API_BASE}/api/enquiryform/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           firstName:       formData.firstName.trim(),
           lastName:        formData.lastName.trim(),

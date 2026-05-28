@@ -113,7 +113,9 @@ export default function BatchManagementPage() {
 
         // Load programmes and batches in parallel
         const [progRes, batchRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/programmes/active/by-institution/${inst.id}`),
+          fetch(`${API_BASE_URL}/api/programmes/active/by-institution/${inst.id}`, {
+            credentials: "include",
+          }),
           fetch(`${API_BASE_URL}/api/batches`, { credentials: "include" }),
         ]);
         const progData: ProgramOption[] = await progRes.json();

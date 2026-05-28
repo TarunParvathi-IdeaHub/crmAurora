@@ -89,7 +89,7 @@ export const programFeeMenu: MenuItem[] = [
   { id: "dashboard",       label: "Dashboard",           icon: LayoutDashboard,   path: "/dashboard"},
   { id: "fee-category",    label: "Fee Category",        icon: Settings,          path: "/modules/crm/feemanagement/fee-category" },
   { id: "tution-fee",      label: "Tution Fee",          icon: CreditCard,        path: "/modules/crm/feemanagement/tution-fee" },
-  { id: "invoices",        label: "Invoices",            icon: ScrollText,        path: "/modules/crm/feemanagement/invoices" },
+  //{ id: "invoices",        label: "Invoices",            icon: ScrollText,        path: "/modules/crm/feemanagement/invoices" },
   // { id: "settings",        label: "Settings",            icon: Settings,          path: "/modules/crm/feemanagement/settings" },
 ];
 
@@ -99,7 +99,7 @@ export const programFeeAdminMenu: MenuItem[] = [
   { id: "fee-category",    label: "Fee Category",        icon: Settings,          path: "/modules/crm/feemanagement/fee-category" },
   { id: "tution-fee",      label: "Tution Fee",          icon: CreditCard,        path: "/modules/crm/feemanagement/tution-fee" },
   { id: "invoice-config",  label: "Invoice Config",      icon: CogIcon,           path: "/modules/crm/feemanagement/invoice-config" },
-  { id: "invoices",        label: "Invoices",            icon: ScrollText,        path: "/modules/crm/feemanagement/invoices" },
+  //{ id: "invoices",        label: "Invoices",            icon: ScrollText,        path: "/modules/crm/feemanagement/invoices" },
   // { id: "settings",        label: "Settings",            icon: Settings,          path: "/modules/crm/feemanagement/settings" },
 ];
 
@@ -108,7 +108,7 @@ export const programFeeMenuAdmissions: MenuItem[] = [
   { id: "dashboard",       label: "Dashboard",           icon: LayoutDashboard,   path: "/dashboard"},
   { id: "fee-category",    label: "Fee Category",        icon: Settings,          path: "/modules/crm/feemanagement/fee-category" },
   { id: "tution-fee",      label: "Tution Fee",          icon: CreditCard,        path: "/modules/crm/feemanagement/tution-fee" },
-  { id: "invoices",        label: "Invoices",            icon: ScrollText,        path: "/modules/crm/feemanagement/invoices" },
+  //{ id: "invoices",        label: "Invoices",            icon: ScrollText,        path: "/modules/crm/feemanagement/invoices" },
   // { id: "settings",        label: "Settings",            icon: Settings,          path: "/modules/crm/feemanagement/settings" },
 ];
 
