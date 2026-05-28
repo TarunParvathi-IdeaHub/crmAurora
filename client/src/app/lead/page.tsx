@@ -7,7 +7,7 @@ import { BookOpen, Users, GraduationCap, CheckCircle2, Award, Shield, Star } fro
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:5000';
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '');
 
 const EMAIL_RE = /^[A-Za-z0-9]+@gmail\.com$/i;
 const MOBILE_RE = /^[6-9]\d{9}$/;

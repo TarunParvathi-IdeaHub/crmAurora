@@ -28,7 +28,7 @@ import { motion, type Variants } from "framer-motion";
 import type { ComponentType } from "react";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 
 type School = {
   id: string;
