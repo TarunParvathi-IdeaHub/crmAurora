@@ -44,12 +44,20 @@ export default function ModulesLayout({ children }: ModulesLayoutProps) {
         if (user.role === "student") profileUrl = `${API_BASE_URL}/api/dashboard/student/profile`;
 
         const res = await fetch(profileUrl, { credentials: "include" });
+
+        // 401 means the auth cookie is missing/expired — same handling as dashboard.
+        if (res.status === 401) {
+          localStorage.removeItem("erpUser");
+          window.location.replace("/login");
+          return;
+        }
+
         const data = (await res.json().catch(() => null)) as
           | { success?: boolean; data?: DashboardProfile }
           | null;
         if (!cancelled && res.ok && data?.success && data.data) setProfile(data.data);
       } catch {
-        // Server unreachable — fail silently; page will show empty profile
+        // Network error (server unreachable) — fail silently; page will show empty profile
       } finally {
         if (!cancelled) setIsProfileLoading(false);
       }

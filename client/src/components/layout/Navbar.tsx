@@ -10,6 +10,9 @@ import { useProfile } from "@/providers/ProfileProvider";
 import { ROLE_NAMES } from "@/lib/utils/constants";
 import { useRef, useState, useEffect } from "react";
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
+
 const roleTitleFallback = "User";
 
 export default function Navbar() {
@@ -33,8 +36,19 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setDropdownOpen(false);
+    // Call the backend to clear the httpOnly cookie. Without this, the cookie
+    // persists in the browser even after localStorage is cleared, causing
+    // authentication confusion on re-login.
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Backend unreachable — still clear local state so the UI unlocks
+    }
     clearProfile();
     localStorage.removeItem("erpUser");
     router.replace("/login");

@@ -5,18 +5,18 @@ const nextConfig: NextConfig = {
 
   /**
    * Proxy all /api/* requests through Vercel so the browser treats cookies
-   * as first-party (same-origin: crm-theta-self.vercel.app).
+   * as first-party (same-origin: crm-aurora.vercel.app).
    *
-   * Without this, Vercel (crm-theta-self.vercel.app) → EC2 (aurora-erp-server.duckdns.org)
-   * is cross-origin, and browsers (especially Safari) block third-party cookies
+   * Without this, Vercel (crm-aurora.vercel.app) → EC2 (aurora-erp-server.duckdns.org)
+   * is cross-origin, and browsers (especially Safari/Chrome) block third-party cookies
    * even with SameSite=None; Secure.
    *
    * Setup required in Vercel project settings (Environment Variables):
-   *   BACKEND_URL          = https://aurora-erp-server.duckdns.org  (server-side only)
-   *   NEXT_PUBLIC_API_BASE_URL = https://crm-theta-self.vercel.app  (so fetch uses same origin)
+   *   BACKEND_URL              = https://aurora-erp-server.duckdns.org  (server-side only, NOT NEXT_PUBLIC)
+   *   NEXT_PUBLIC_API_BASE_URL = https://crm-aurora.vercel.app          (must match Vercel domain)
    *
-   * Setup required in EC2 .env:
-   *   CORS_ORIGIN = https://crm-theta-self.vercel.app
+   * Setup required on EC2 (.env):
+   *   CORS_ORIGIN = https://crm-aurora.vercel.app
    *   NODE_ENV    = production
    */
   async rewrites() {
