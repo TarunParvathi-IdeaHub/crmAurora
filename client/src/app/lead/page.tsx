@@ -9,7 +9,7 @@ import { BookOpen, Users, GraduationCap, CheckCircle2, Award, Shield, Star } fro
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:5000';
 
-const EMAIL_RE = /^[A-Za-z0-9]+@gmail\.com$/i;
+const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/i;
 const MOBILE_RE = /^[6-9]\d{9}$/;
 const NAME_RE = /^[A-Za-z\s]+$/;
 
@@ -356,7 +356,7 @@ export default function LeadPage() {
       errors.lastName = 'Last name should contain only letters and spaces.';
     }
     if (!EMAIL_RE.test(formData.email.trim())) {
-      errors.email = 'Please enter a valid Gmail address.';
+      errors.email = 'Please enter a valid email address.';
     }
     if (!MOBILE_RE.test(formData.mobileNo.trim())) {
       errors.mobileNo = 'Please enter a valid 10-digit mobile number.';
@@ -422,9 +422,7 @@ export default function LeadPage() {
 
     if (name === 'email') {
       const compact = value.replace(/\s+/g, '');
-      const localRaw = compact.split('@')[0] ?? '';
-      const local = localRaw.replace(/[^A-Za-z0-9]/g, '');
-      nextValue = local ? `${local}@gmail.com` : '';
+      nextValue = compact.replace(/[^A-Za-z0-9@._%+-]/g, '');
     }
 
     setFormData((prev) => ({ ...prev, [name]: nextValue }));
