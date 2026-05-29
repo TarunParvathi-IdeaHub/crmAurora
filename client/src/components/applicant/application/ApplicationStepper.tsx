@@ -13,7 +13,8 @@ const STEPS: Step[] = [
   { id: 1, label: "Education", description: "Academic history" },
   { id: 2, label: "Entrance Exam", description: "Exam & AURUM details" },
   { id: 3, label: "Documents", description: "Upload required files" },
-  { id: 4, label: "Preview", description: "Review & submit" },
+  { id: 4, label: "Preview", description: "Review your application" },
+  { id: 5, label: "Payment", description: "Application fee & submit" },
 ];
 
 type ApplicationStepperProps = {

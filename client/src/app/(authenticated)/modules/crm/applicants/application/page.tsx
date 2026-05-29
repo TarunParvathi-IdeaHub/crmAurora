@@ -13,6 +13,7 @@ import type {
 import ApplicationHeader from "@/components/applicant/application/ApplicationHeader";
 import ApplicationStepper from "@/components/applicant/application/ApplicationStepper";
 import StepActions from "@/components/applicant/application/StepActions";
+import PaymentSection from "@/components/applicant/application/PaymentSection";
 import BasicDetailsStep from "@/components/applicant/application/steps/BasicDetailsStep";
 import EducationDetailsStep from "@/components/applicant/application/steps/EducationDetailsStep";
 import EntranceDetailsStep from "@/components/applicant/application/steps/EntranceDetailsStep";
@@ -29,7 +30,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "ht
  */
 const getDraftKey = (appId: string) => `applicant-draft-${appId}`;
 const APP_ID_KEY = "applicant-app-id";
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 // ── Default empty state ───────────────────────────────────────────────────────
 
@@ -118,7 +119,11 @@ function isStepComplete(step: number, state: ApplicationFormState, dl = ""): boo
       e.intermediateYearOfPassing && e.intermediatePercentage
     );
     if (!base) return false;
-    if (!e.ugBoard || !e.ugInstitutionName || !e.ugHallTicketNo || !e.ugYearOfPassing || !e.ugPercentage) return false;
+    // UG fields required only for PG and PhD applicants
+    const ugRequired = dl === "Post Graduation (PG)" || dl === "Doctor of Philosophy (Phd)";
+    if (ugRequired) {
+      if (!e.ugBoard || !e.ugInstitutionName || !e.ugHallTicketNo || !e.ugYearOfPassing || !e.ugPercentage) return false;
+    }
     const showPG = dl === "Doctor of Philosophy (Phd)" || e.hasPGDegree;
     if (showPG) {
       if (!e.pgBoard || !e.pgInstitutionName || !e.pgHallTicketNo || !e.pgYearOfPassing || !e.pgPercentage) return false;
@@ -140,11 +145,14 @@ function isStepComplete(step: number, state: ApplicationFormState, dl = ""): boo
     return true;
   }
   if (step === 3) {
-    // Documents: complete when all required documents are uploaded
     const d = state.documents;
+    const ugDocRequired = dl === "Post Graduation (PG)" || dl === "Doctor of Philosophy (Phd)";
+    const pgDocRequired = dl === "Doctor of Philosophy (Phd)";
     return !!(
       d.aadharCard && d.sscMemo && d.intermediateMemo &&
-      d.ugMemo && d.pgMemo && d.bonafideCertificate && d.transferCertificate
+      (!ugDocRequired || d.ugMemo) &&
+      (!pgDocRequired || d.pgMemo) &&
+      d.bonafideCertificate && d.transferCertificate
     );
   }
   // Step 4 (Preview) is never pre-marked complete
@@ -240,20 +248,23 @@ function validateStep(
     if (e.intermediatePercentage.trim() && !PERCENT_RE.test(e.intermediatePercentage.trim())) {
       errors.intermediatePercentage = "Percentage / CGPA should contain only numbers and dot.";
     }
-    // UG required for all applicants
-    if (!e.ugBoard?.trim()) errors.ugBoard = "University / board is required.";
-    if (!e.ugInstitutionName?.trim()) errors.ugInstitutionName = "Institution name is required.";
-    if (!e.ugHallTicketNo?.trim()) errors.ugHallTicketNo = "Hall ticket number is required.";
-    if (e.ugInstitutionName?.trim() && !INSTITUTION_RE.test(e.ugInstitutionName.trim())) {
-      errors.ugInstitutionName = "Institution name should contain only letters and spaces.";
-    }
-    if (e.ugHallTicketNo?.trim() && !HALL_TICKET_RE.test(e.ugHallTicketNo.trim())) {
-      errors.ugHallTicketNo = "Hall ticket number should contain only numbers and dot.";
-    }
-    if (!e.ugYearOfPassing) errors.ugYearOfPassing = "Year is required.";
-    if (!e.ugPercentage) errors.ugPercentage = "Percentage is required.";
-    if (e.ugPercentage?.trim() && !PERCENT_RE.test(e.ugPercentage.trim())) {
-      errors.ugPercentage = "Percentage / CGPA should contain only numbers and dot.";
+    // UG required only for PG and PhD applicants
+    const ugRequired = dl === "Post Graduation (PG)" || dl === "Doctor of Philosophy (Phd)";
+    if (ugRequired) {
+      if (!e.ugBoard?.trim()) errors.ugBoard = "University / board is required.";
+      if (!e.ugInstitutionName?.trim()) errors.ugInstitutionName = "Institution name is required.";
+      if (!e.ugHallTicketNo?.trim()) errors.ugHallTicketNo = "Hall ticket number is required.";
+      if (e.ugInstitutionName?.trim() && !INSTITUTION_RE.test(e.ugInstitutionName.trim())) {
+        errors.ugInstitutionName = "Institution name should contain only letters and spaces.";
+      }
+      if (e.ugHallTicketNo?.trim() && !HALL_TICKET_RE.test(e.ugHallTicketNo.trim())) {
+        errors.ugHallTicketNo = "Hall ticket number should contain only numbers and dot.";
+      }
+      if (!e.ugYearOfPassing) errors.ugYearOfPassing = "Year is required.";
+      if (!e.ugPercentage) errors.ugPercentage = "Percentage is required.";
+      if (e.ugPercentage?.trim() && !PERCENT_RE.test(e.ugPercentage.trim())) {
+        errors.ugPercentage = "Percentage / CGPA should contain only numbers and dot.";
+      }
     }
     // PG required when PG section is shown
     const showPG = dl === "Doctor of Philosophy (Phd)" || e.hasPGDegree;
@@ -290,11 +301,13 @@ function validateStep(
 
   if (step === 3) {
     const d = state.documents;
+    const ugDocRequired = dl === "Post Graduation (PG)" || dl === "Doctor of Philosophy (Phd)";
+    const pgDocRequired = dl === "Doctor of Philosophy (Phd)";
     if (!d.aadharCard) errors.aadharCard = "Aadhaar card is required.";
     if (!d.sscMemo) errors.sscMemo = "SSC / 10th memo is required.";
     if (!d.intermediateMemo) errors.intermediateMemo = "Intermediate / 12th memo is required.";
-    if (!d.ugMemo) errors.ugMemo = "UG degree certificate is required.";
-    if (!d.pgMemo) errors.pgMemo = "PG degree certificate is required.";
+    if (ugDocRequired && !d.ugMemo) errors.ugMemo = "UG degree certificate is required.";
+    if (pgDocRequired && !d.pgMemo) errors.pgMemo = "PG degree certificate is required.";
     if (!d.bonafideCertificate) errors.bonafideCertificate = "Bonafide certificate is required.";
     if (!d.transferCertificate) errors.transferCertificate = "Transfer certificate is required.";
   }
@@ -1068,7 +1081,7 @@ function ApplicationPage() {
       {/* Mobile: compact progress indicator */}
       <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:hidden">
         <div className="flex gap-1.5">
-          {[0, 1, 2, 3, 4].map((i) => (
+          {[0, 1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
               className={`h-1.5 rounded-full transition-all ${
@@ -1084,7 +1097,7 @@ function ApplicationPage() {
         <p className="text-sm font-medium text-slate-700">
           Step {currentStep + 1} of {TOTAL_STEPS}:{" "}
           <span className="text-blue-600">
-            {["Basic Details", "Education", "Entrance Exam", "Documents", "Preview"][currentStep]}
+            {["Basic Details", "Education", "Entrance Exam", "Documents", "Preview", "Payment"][currentStep]}
           </span>
         </p>
       </div>
@@ -1143,13 +1156,26 @@ function ApplicationPage() {
               <PreviewStep
                 formState={appState}
                 onGoToStep={handleGoToStep}
-                onBack={handleBack}
-                onPay={handlePay}
-                onSubmit={handleSubmit}
-                isSubmitting={isSubmitting}
-                consentDeclaration={appState.consentDeclaration}
-                onConsentChange={handleConsentChange}
               />
+            )}
+            {currentStep === 5 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Application Fee</h2>
+                  <p className="mt-0.5 text-sm text-slate-500">
+                    Complete payment to submit your application.
+                  </p>
+                </div>
+                <PaymentSection
+                  paymentStatus={appState.paymentStatus}
+                  applicationStatus={appState.applicationStatus}
+                  onPay={handlePay}
+                  onSubmit={handleSubmit}
+                  isSubmitting={isSubmitting}
+                  consentDeclaration={appState.consentDeclaration}
+                  onConsentChange={handleConsentChange}
+                />
+              </div>
             )}
 
             {/* Navigation actions (hidden on preview step — it has its own) */}

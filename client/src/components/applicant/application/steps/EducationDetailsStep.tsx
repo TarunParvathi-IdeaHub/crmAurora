@@ -78,10 +78,10 @@ export default function EducationDetailsStep({
   // Derive UG/PG section visibility from degree level
   const isPG = degreeLevel === "Post Graduation (PG)";
   const isPhd = degreeLevel === "Doctor of Philosophy (Phd)";
-  const showUG = true; // UG details are mandatory for all applicants
-  const showPG = isPG || isPhd || data.hasPGDegree;
-  const ugRequired = true;
-  const pgRequired = showPG;
+  const showUG = isPG || isPhd;   // UG: shown and mandatory for PG/PhD only
+  const showPG = isPhd;           // PG: shown and mandatory for PhD only
+  const ugRequired = isPG || isPhd;
+  const pgRequired = isPhd;
 
   return (
     <div className="space-y-8">
@@ -253,9 +253,10 @@ export default function EducationDetailsStep({
         </div>
       </div>
 
-      <hr className="border-slate-200" />
+      {showUG && <hr className="border-slate-200" />}
 
-      {/* UG Toggle / Section */}
+      {/* UG Section — shown for PG/PhD applicants (mandatory) */}
+      {showUG && (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700">
@@ -326,8 +327,9 @@ export default function EducationDetailsStep({
           </div>
         </div>
       </div>
+      )}
 
-      <hr className="border-slate-200" />
+      {showPG && <hr className="border-slate-200" />}
 
       {showPG && (
         <div className="space-y-4">

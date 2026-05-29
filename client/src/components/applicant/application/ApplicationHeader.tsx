@@ -1,27 +1,49 @@
 "use client";
 
-import { BookOpen, Building2, Calendar, FileText, GraduationCap } from "lucide-react";
+import {
+  BookOpen,
+  Building2,
+  CalendarDays,
+  FileText,
+  GraduationCap,
+  Clock3,
+} from "lucide-react";
+
 import type { ApplicationStatus } from "@/types/applicant";
 
 const statusConfig: Record<
   ApplicationStatus,
-  { label: string; className: string }
+  {
+    label: string;
+    className: string;
+    dotClass: string;
+  }
 > = {
   DRAFT: {
     label: "Draft",
-    className: "border-amber-200 bg-amber-100 text-amber-700",
+    className:
+      "border-amber-200 bg-amber-50 text-amber-700 ring-amber-100",
+    dotClass: "bg-amber-500",
   },
+
   PAYMENT_PENDING: {
     label: "Payment Pending",
-    className: "border-orange-200 bg-orange-100 text-orange-700",
+    className:
+      "border-orange-200 bg-orange-50 text-orange-700 ring-orange-100",
+    dotClass: "bg-orange-500",
   },
+
   PAYMENT_COMPLETED: {
-    label: "Payment Done",
-    className: "border-blue-200 bg-blue-100 text-blue-700",
+    label: "Payment Completed",
+    className: "border-blue-200 bg-blue-50 text-blue-700 ring-blue-100",
+    dotClass: "bg-blue-500",
   },
+
   SUBMITTED: {
     label: "Submitted",
-    className: "border-emerald-200 bg-emerald-100 text-emerald-700",
+    className:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 ring-emerald-100",
+    dotClass: "bg-emerald-500",
   },
 };
 
@@ -34,6 +56,25 @@ type ApplicationHeaderProps = {
   admissionCycle?: string;
 };
 
+function InfoPill({
+  icon: Icon,
+  label,
+  className,
+}: {
+  icon: React.ElementType;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${className}`}
+    >
+      <Icon size={13} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 export default function ApplicationHeader({
   applicationStatus,
   lastSavedAt,
@@ -45,70 +86,96 @@ export default function ApplicationHeader({
   const status = statusConfig[applicationStatus];
 
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-          <FileText size={20} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {/* Institution name as primary title */}
-          <div className="flex items-center gap-2">
-            {institutionName ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                <Building2 size={11} />
-                {institutionName}
-              </span>
-            ) : (
-              <h1 className="text-base font-semibold text-slate-900">
-                Admission Application
-              </h1>
-            )}
+    <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      {/* subtle background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-blue-50/40" />
+
+      <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        {/* LEFT */}
+        <div className="flex min-w-0 items-start gap-4">
+          {/* Icon */}
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600 shadow-sm">
+            <FileText size={24} strokeWidth={2.2} />
           </div>
 
-          {/* Study level + Programme pills */}
-          {(studyLevel || programName) && (
-            <div className="flex flex-wrap items-center gap-1.5">
+          {/* Content */}
+          <div className="min-w-0 space-y-3">
+            {/* Heading */}
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                  Admission Application
+                </h1>
+
+                {institutionName && (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-200">
+                    <Building2 size={12} />
+                    <span className="max-w-[220px] truncate">
+                      {institutionName}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-sm text-slate-500">
+                Complete your application details in the following steps. You can save and continue later at any time.
+              </p>
+            </div>
+
+            {/* Pills */}
+            <div className="flex flex-wrap items-center gap-2">
               {studyLevel && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-[11px] font-medium text-violet-700">
-                  <GraduationCap size={10} />
-                  {studyLevel}
-                </span>
+                <InfoPill
+                  icon={GraduationCap}
+                  label={studyLevel}
+                  className="border-violet-200 bg-violet-50 text-violet-700"
+                />
               )}
+
               {programName && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
-                  <BookOpen size={10} />
-                  {programName}
-                </span>
+                <InfoPill
+                  icon={BookOpen}
+                  label={programName}
+                  className="border-slate-200 bg-slate-50 text-slate-700"
+                />
+              )}
+
+              {admissionCycle && (
+                <InfoPill
+                  icon={CalendarDays}
+                  label={admissionCycle}
+                  className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                />
               )}
             </div>
-          )}
 
-          {/* Admission cycle + last saved */}
-          <div className="flex items-center gap-2">
-            {admissionCycle && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                <Calendar size={10} />
-                {admissionCycle}
-              </span>
-            )}
+            {/* Footer Meta */}
             {lastSavedAt && (
-              <p className="text-[11px] text-slate-400">
-                Saved{" "}
-                {lastSavedAt.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <Clock3 size={13} />
+                <span>
+                  Last saved at{" "}
+                  {lastSavedAt.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
             )}
           </div>
         </div>
-      </div>
 
-      <span
-        className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${status.className}`}
-      >
-        {status.label}
-      </span>
+        {/* RIGHT STATUS */}
+        <div
+          className={`inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ring-4 ${status.className}`}
+        >
+          <span
+            className={`h-2 w-2 rounded-full ${status.dotClass}`}
+          />
+
+          {status.label}
+        </div>
+      </div>
     </div>
   );
 }

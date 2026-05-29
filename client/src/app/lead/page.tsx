@@ -72,7 +72,6 @@ const STATS = [
   { value: '25+', label: 'Years of Excellence' },
   { value: '10K+', label: 'Alumni Network' },
   { value: '50+', label: 'Programmes' },
-  { value: '95%', label: 'Placement Rate' },
 ];
 
 const ACCREDITATIONS = [

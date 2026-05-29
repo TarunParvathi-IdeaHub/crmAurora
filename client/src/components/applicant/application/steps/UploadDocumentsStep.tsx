@@ -186,15 +186,16 @@ export default function UploadDocumentsStep({
 
   const isPG  = degreeLevel === "Post Graduation (PG)";
   const isPhd = degreeLevel === "Doctor of Philosophy (Phd)";
+  const showUGMemo = isPG || isPhd;   // UG degree cert required for PG/PhD
+  const showPGMemo = isPhd;           // PG degree cert required for PhD only
 
-  // Build visible doc list — UG and PG memos are always required
+  // Build visible doc list based on degree level
   const visibleDocs: DocConfig[] = [
     { key: "aadharCard",          label: "Aadhaar Card",             required: true,  hint: "PDF only, max 5 MB. Upload front & back scanned together." },
     { key: "sscMemo",             label: "SSC / 10th Memo",           required: true,  hint: "PDF only, max 5 MB. Official mark sheet / memo." },
     { key: "intermediateMemo",    label: "Intermediate / 12th Memo",  required: true,  hint: "PDF only, max 5 MB. Official mark sheet / memo." },
-    { key: "ugMemo",              label: "UG Degree Certificate",     required: true,  hint: "PDF only, max 5 MB. Mandatory for all applicants." },
-    { key: "pgMemo",              label: "PG Degree Certificate",     required: true,  hint: "PDF only, max 5 MB. Mandatory for all applicants." },
-    // Gap Certificate — always shown
+    ...(showUGMemo ? [{ key: "ugMemo" as DocKey,  label: "UG Degree Certificate",    required: true,  hint: "PDF only, max 5 MB. Required for PG/PhD applicants." }] : []),
+    ...(showPGMemo ? [{ key: "pgMemo" as DocKey,  label: "PG Degree Certificate",    required: true,  hint: "PDF only, max 5 MB. Required for PhD applicants." }] : []),
     { key: "gapCertificate",      label: "Gap Certificate",           required: false, hint: "PDF only, max 5 MB. Upload if you had an academic gap year." },
     { key: "bonafideCertificate", label: "Bonafide Certificate",      required: true,  hint: "PDF only, max 5 MB. Mandatory for all applicants." },
     { key: "transferCertificate", label: "Transfer Certificate",      required: true,  hint: "PDF only, max 5 MB. Mandatory for all applicants." },
