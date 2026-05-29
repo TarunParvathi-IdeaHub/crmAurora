@@ -718,18 +718,87 @@ function ApplicationPage() {
     // draft — which would then block full server hydration on the next page load.
     if (hasServerData.current) persistDraft(state);
 
-    // Documents step: skip the API entirely when no new files were selected
-    // to avoid a pointless multipart request.
+    // Documents step: upload files one-by-one to avoid oversized multipart
+    // requests in production proxies (common nginx 413 issue when many PDFs
+    // are sent together in a single request).
     if (step === 3) {
       const docKeys: (keyof UploadedDocuments)[] = [
         "aadharCard", "sscMemo", "intermediateMemo", "ugMemo",
-        "pgMemo", "bonafideCertificate", "transferCertificate",
+        "pgMemo", "gapCertificate", "bonafideCertificate", "transferCertificate",
       ];
-      const hasNewFiles = docKeys.some((k) => state.documents[k]?.file != null);
-      if (!hasNewFiles) {
+      const pendingDocs = docKeys.filter((k) => state.documents[k]?.file != null);
+
+      if (pendingDocs.length === 0) {
         setLastSavedAt(new Date());
         setSaveSuccess(true);
         setSaveError("");
+        return true;
+      }
+
+      const mergedDocUrls: Record<string, string> = {};
+
+      try {
+        for (const key of pendingDocs) {
+          const file = state.documents[key]?.file;
+          if (!file) continue;
+
+          const fdSingle = new FormData();
+          fdSingle.append(key, file, file.name);
+
+          const res = await fetch(
+            `${API_BASE}/api/student-application/save-draft/${applicationId}`,
+            { method: "PUT", body: fdSingle, credentials: "include" }
+          );
+
+          const raw = await res.text().catch(() => "");
+          let payload: { error?: string; uploadedDocuments?: Record<string, string> } = {};
+          if (raw) {
+            try {
+              payload = JSON.parse(raw) as { error?: string; uploadedDocuments?: Record<string, string> };
+            } catch {
+              payload = {};
+            }
+          }
+
+          if (!res.ok) {
+            const fallback =
+              res.status === 413
+                ? "Upload request is too large for production proxy. Upload smaller PDFs or increase nginx client_max_body_size."
+                : res.status === 400
+                ? "Invalid document upload. Only PDF files up to 5 MB are allowed."
+                : "Failed to save. Please try again.";
+            setSaveError(payload.error ?? fallback);
+            return false;
+          }
+
+          Object.assign(mergedDocUrls, payload.uploadedDocuments ?? {});
+        }
+
+        if (Object.keys(mergedDocUrls).length > 0) {
+          setAppState((s) => {
+            const updatedDocs = { ...s.documents };
+            for (const [field, url] of Object.entries(mergedDocUrls)) {
+              const k = field as keyof UploadedDocuments;
+              if (updatedDocs[k]) {
+                updatedDocs[k] = {
+                  name: updatedDocs[k]!.name,
+                  size: updatedDocs[k]!.size,
+                  previewUrl: url,
+                  file: null,
+                };
+              }
+            }
+            return { ...s, documents: updatedDocs };
+          });
+        }
+
+        setLastSavedAt(new Date());
+        setSaveSuccess(true);
+        setSaveError("");
+        return true;
+      } catch {
+        setSaveError("Network error. Draft saved locally — check your connection.");
+        setLastSavedAt(new Date());
         return true;
       }
     }
@@ -740,19 +809,23 @@ function ApplicationPage() {
         `${API_BASE}/api/student-application/save-draft/${applicationId}`,
         { method: "PUT", body: fd, credentials: "include" }
       );
+
+      const raw = await res.text().catch(() => "");
+      let payload: { error?: string; uploadedDocuments?: Record<string, string> } = {};
+      if (raw) {
+        try {
+          payload = JSON.parse(raw) as { error?: string; uploadedDocuments?: Record<string, string> };
+        } catch {
+          payload = {};
+        }
+      }
+
       if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        setSaveError(
-          (payload as { error?: string }).error ?? "Failed to save. Please try again."
-        );
+        setSaveError(payload.error ?? "Failed to save. Please try again.");
         return false;
       }
-      // Parse success body: update document slots with the fresh signed URLs
-      // returned by the server for each newly uploaded file. This clears the
-      // local File reference so the same file is not re-uploaded on the next save.
-      const payload = await res.json().catch(() => ({}));
-      const newDocUrls =
-        (payload as { uploadedDocuments?: Record<string, string> }).uploadedDocuments ?? {};
+
+      const newDocUrls = payload.uploadedDocuments ?? {};
       if (Object.keys(newDocUrls).length > 0) {
         setAppState((s) => {
           const updatedDocs = { ...s.documents };
@@ -770,6 +843,7 @@ function ApplicationPage() {
           return { ...s, documents: updatedDocs };
         });
       }
+
       setLastSavedAt(new Date());
       setSaveSuccess(true);
       setSaveError("");
