@@ -3,17 +3,18 @@ import type { NextFunction, Request, Response } from "express";
 import { ApplicationStatus, InvoiceStatus, PaymentStatus, PaymentType } from "@prisma/client";
 import prisma from "../../config/database";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants ───────────────────────────────────────────────────────────────
 
 const DEFAULT_APPLICATION_FEE = 1000;
 const SEQUENCE_PAD = 4;
 
-// ── TypeScript types ──────────────────────────────────────────────────────────
+// ── TypeScript types ────────────────────────────────────────────────────────
 
 type EasebuzzEnv = "test" | "prod";
 
 interface EasebuzzConfig {
   key: string;
+  subMerchantId: string;
   salt: string;
   env: EasebuzzEnv;
 }
@@ -58,11 +59,12 @@ interface EasebuzzCallbackBody {
 function getEasebuzzConfig(): EasebuzzConfig {
   const key = process.env.EASEBUZZ_KEY;
   const salt = process.env.EASEBUZZ_SALT;
-  if (!key || !salt) {
-    throw new Error("EASEBUZZ_KEY and EASEBUZZ_SALT must be configured in .env");
+  const subMerchantId = process.env.EASEBUZZ_SUBKEY;
+  if (!key || !salt || !subMerchantId) {
+    throw new Error("EASEBUZZ_KEY, EASEBUZZ_SUBKEY, and EASEBUZZ_SALT must be configured in .env");
   }
   const env: EasebuzzEnv = process.env.EASEBUZZ_ENV === "prod" ? "prod" : "test";
-  return { key, salt, env };
+  return { key, subMerchantId, salt, env };
 }
 
 function getEasebuzzBaseUrl(env: EasebuzzEnv): string {
@@ -142,6 +144,25 @@ function formatSequenceNumber(prefix: string, sequence: number): string {
 
 function buildPendingInvoiceNumber(txnid: string): string {
   return `PENDING-${txnid}`;
+}
+
+// ── Frontend redirect helper ──────────────────────────────────────────────────
+
+/**
+ * Builds the URL to redirect the applicant's browser back to the frontend
+ * after EaseBuzz posts the payment result. This ensures the applicant always
+ * lands on the proper UI instead of seeing raw JSON.
+ */
+function buildFrontendPaymentUrl(
+  status: "success" | "failed" | "error",
+  applicationId?: string | null
+): string {
+  const base =
+    process.env.FRONTEND_URL?.replace(/\/$/, "") ?? "http://localhost:3000";
+  const path = "/modules/crm/applicants/application";
+  const params = new URLSearchParams({ payment: status });
+  if (applicationId) params.set("applicationId", applicationId);
+  return `${base}${path}?${params.toString()}`;
 }
 
 // ── Controllers ───────────────────────────────────────────────────────────────
@@ -351,6 +372,7 @@ export async function initiatePayment(
     // ── Call EaseBuzz initiateLink ────────────────────────────────────────────
     const params = new URLSearchParams({
       key: ebConfig.key,
+      sub_merchant_id: ebConfig.subMerchantId,
       txnid: effectiveTxnId,
       amount: amountStr,
       productinfo: hashFields.productinfo,
@@ -443,9 +465,7 @@ export async function paymentSuccess(
     const easepayid = body.easepayid ?? null;
 
     if (!txnid || !status || !receivedHash) {
-      res
-        .status(400)
-        .json({ error: "Missing required payment callback fields." });
+      res.redirect(302, buildFrontendPaymentUrl("error", udf1 || null));
       return;
     }
 
@@ -477,14 +497,12 @@ export async function paymentSuccess(
     });
 
     if (!hashValid) {
-      res
-        .status(400)
-        .json({ error: "Payment verification failed: hash mismatch." });
+      res.redirect(302, buildFrontendPaymentUrl("error", udf1 || null));
       return;
     }
 
     if (status !== "success") {
-      res.status(400).json({ error: "Callback status is not success." });
+      res.redirect(302, buildFrontendPaymentUrl("failed", udf1 || null));
       return;
     }
 
@@ -502,15 +520,14 @@ export async function paymentSuccess(
     });
 
     if (!txn) {
-      res.status(404).json({ error: "Payment transaction not found." });
+      res.redirect(302, buildFrontendPaymentUrl("error", udf1 || null));
       return;
     }
 
     // ── Idempotency: already processed ────────────────────────────────────────
     if (txn.paymentStatus === PaymentStatus.SUCCESS) {
-      res
-        .status(200)
-        .json({ message: "Payment already processed successfully." });
+      const alreadyPaidId = txn.studentAdmissionApplicationId ?? (udf1 || null);
+      res.redirect(302, buildFrontendPaymentUrl("success", alreadyPaidId));
       return;
     }
 
@@ -518,9 +535,7 @@ export async function paymentSuccess(
       txn.studentAdmissionApplicationId ?? (udf1 || null);
 
     if (!applicationId) {
-      res.status(400).json({
-        error: "Cannot identify the application for this transaction.",
-      });
+      res.redirect(302, buildFrontendPaymentUrl("error", null));
       return;
     }
 
@@ -530,9 +545,7 @@ export async function paymentSuccess(
       select: { id: true, paymentStatus: true },
     });
     if (existingAppFee?.paymentStatus === PaymentStatus.SUCCESS) {
-      res
-        .status(200)
-        .json({ message: "Payment already processed successfully." });
+      res.redirect(302, buildFrontendPaymentUrl("success", applicationId));
       return;
     }
 
@@ -548,9 +561,7 @@ export async function paymentSuccess(
       },
     });
     if (!financeConfig) {
-      res
-        .status(409)
-        .json({ error: "Finance configuration not found for this institution." });
+      res.redirect(302, buildFrontendPaymentUrl("error", applicationId));
       return;
     }
 
@@ -564,9 +575,7 @@ export async function paymentSuccess(
       select: { id: true },
     });
     if (!feeCategory) {
-      res
-        .status(409)
-        .json({ error: "Application fee category not found for this institution." });
+      res.redirect(302, buildFrontendPaymentUrl("error", applicationId));
       return;
     }
 
@@ -664,11 +673,7 @@ export async function paymentSuccess(
       };
     });
 
-    res.status(200).json({
-      message: "Payment processed successfully.",
-      invoiceNumber: result.invoiceNumber,
-      receiptNumber: result.receiptNumber,
-    });
+    res.redirect(302, buildFrontendPaymentUrl("success", applicationId));
   } catch (error) {
     next(error);
   }
@@ -692,9 +697,10 @@ export async function paymentFailure(
     const txnid = body.txnid ?? "";
     const status = body.status ?? "failure";
     const receivedHash = body.hash ?? "";
+    const udf1 = body.udf1 ?? "";
 
     if (!txnid) {
-      res.status(400).json({ error: "txnid is required." });
+      res.redirect(302, buildFrontendPaymentUrl("failed", udf1 || null));
       return;
     }
 
@@ -726,9 +732,7 @@ export async function paymentFailure(
       });
 
       if (!hashValid) {
-        res
-          .status(400)
-          .json({ error: "Payment verification failed: hash mismatch." });
+        res.redirect(302, buildFrontendPaymentUrl("failed", udf1 || null));
         return;
       }
     }
@@ -736,18 +740,26 @@ export async function paymentFailure(
     // ── Find PaymentTransaction ───────────────────────────────────────────────
     const txn = await prisma.paymentTransaction.findUnique({
       where: { transactionId: txnid },
-      select: { id: true, invoiceId: true, paymentStatus: true },
+      select: {
+        id: true,
+        invoiceId: true,
+        paymentStatus: true,
+        studentAdmissionApplicationId: true,
+      },
     });
 
     if (!txn) {
-      // Nothing to update — acknowledge and return
-      res.status(200).json({ message: "Acknowledged." });
+      res.redirect(302, buildFrontendPaymentUrl("failed", udf1 || null));
       return;
     }
 
-    // If already finalized, nothing to do
+    const failureAppId = txn.studentAdmissionApplicationId ?? (udf1 || null);
+
+    // If already finalized, redirect based on the actual recorded status
     if (txn.paymentStatus !== PaymentStatus.PENDING) {
-      res.status(200).json({ message: "Transaction already finalized." });
+      const redirectStatus =
+        txn.paymentStatus === PaymentStatus.SUCCESS ? "success" : "failed";
+      res.redirect(302, buildFrontendPaymentUrl(redirectStatus, failureAppId));
       return;
     }
 
@@ -763,7 +775,7 @@ export async function paymentFailure(
       }),
     ]);
 
-    res.status(200).json({ message: "Payment failure recorded." });
+    res.redirect(302, buildFrontendPaymentUrl("failed", failureAppId));
   } catch (error) {
     next(error);
   }
