@@ -5,9 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/providers/ProfileProvider";
 import type {
   ApplicationFormState,
+  ApplicationStatus,
   BasicDetails,
   EducationDetails,
   EntranceExamDetails,
+  PaymentStatus,
   UploadedDocuments,
 } from "@/types/applicant";
 import ApplicationHeader from "@/components/applicant/application/ApplicationHeader";
@@ -540,7 +542,25 @@ function ApplicationPage() {
       credentials: "include",
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(({ data }) => {
+      .then(async ({ data }) => {
+        // Fetch payment status in parallel — non-blocking, ignore on error
+        const feeStatus = await fetch(
+          `${API_BASE}/api/application-fee/status/${applicationId}`,
+          { credentials: "include" }
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null) as { paymentStatus?: string } | null;
+
+        const serverPaymentStatus: PaymentStatus =
+          feeStatus?.paymentStatus === "SUCCESS" ? "SUCCESS" :
+          feeStatus?.paymentStatus === "FAILED"  ? "FAILED"  : "PENDING";
+
+        // Map backend ApplicationStatus enum to frontend type
+        const serverAppStatus: ApplicationStatus =
+          (data.applicationStatus as string) === "APPLICATION_SUBMITTED"
+            ? "SUBMITTED"
+            : "DRAFT";
+
         const level: string = data?.degreeLevel?.levelName ?? "";
         setDegreeLevel(level);
         setInstitutionName(data?.institution?.institutionName ?? "");
@@ -650,6 +670,8 @@ function ApplicationPage() {
             },
             documents: serverDocs,
             consentDeclaration: data.consentDeclaration ?? "",
+            paymentStatus: serverPaymentStatus,
+            applicationStatus: serverAppStatus,
           }));
         } else {
           // Local draft exists — preserve the user's in-progress text edits but:
@@ -673,6 +695,8 @@ function ApplicationPage() {
               bonafideCertificate: s.documents.bonafideCertificate?.file ? s.documents.bonafideCertificate : serverDocs.bonafideCertificate,
               transferCertificate: s.documents.transferCertificate?.file ? s.documents.transferCertificate : serverDocs.transferCertificate,
             },
+            paymentStatus: serverPaymentStatus,
+            applicationStatus: serverAppStatus === "SUBMITTED" ? "SUBMITTED" : s.applicationStatus,
           }));
         }
       })
@@ -685,6 +709,31 @@ function ApplicationPage() {
   useEffect(() => {
     if (applicationId) refreshFromServer();
   }, [applicationId, refreshFromServer]);
+
+  // ── Handle return from EaseBuzz payment gateway ──────────────────────────────
+  // After payment, EaseBuzz POSTs to the backend which redirects the browser
+  // to this page with ?payment=success|failed|error.  We detect that here,
+  // jump straight to the payment step, clean the URL, and let refreshFromServer
+  // (already triggered above) load the authoritative status from the server.
+  useEffect(() => {
+    const paymentParam = searchParams.get("payment");
+    if (!paymentParam) return;
+
+    // Navigate to the payment/submit step
+    setAppState((s) => ({ ...s, currentStep: 5 }));
+
+    // If payment failed, set the status immediately so the UI is responsive
+    // even before refreshFromServer completes
+    if (paymentParam === "failed") {
+      setAppState((s) => ({ ...s, currentStep: 5, paymentStatus: "FAILED" }));
+    }
+
+    // Clean the ?payment= param from the URL so a hard refresh doesn't re-trigger
+    const url = new URL(window.location.href);
+    url.searchParams.delete("payment");
+    window.history.replaceState(null, "", url.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const completedSteps = useMemo(() => {
     const s = new Set<number>();
