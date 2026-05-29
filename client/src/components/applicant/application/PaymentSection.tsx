@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, CreditCard, Send } from "lucide-react";
+import { AlertCircle, CheckCircle2, CreditCard, PhoneCall, Send } from "lucide-react";
 import type { ApplicationStatus, PaymentStatus } from "@/types/applicant";
 
 const CONSENT_TEXT =
@@ -26,6 +26,7 @@ export default function PaymentSection({
   onConsentChange,
 }: PaymentSectionProps) {
   const isPaid = paymentStatus === "SUCCESS";
+  const isFailed = paymentStatus === "FAILED";
   const isSubmitted = applicationStatus === "SUBMITTED";
   const hasConsent = consentDeclaration.trim().length > 0;
 
@@ -45,6 +46,38 @@ export default function PaymentSection({
             </p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Payment failed — ask applicant to contact admin
+  if (isFailed) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={22} className="mt-0.5 shrink-0 text-rose-600" />
+            <div>
+              <p className="font-semibold text-rose-800">Payment Failed</p>
+              <p className="mt-1 text-sm text-rose-700">
+                Your payment could not be processed. If the amount was deducted
+                from your account, it will be refunded within 5–7 business days.
+              </p>
+              <p className="mt-3 text-sm text-rose-700 font-medium flex items-center gap-1.5">
+                <PhoneCall size={14} className="shrink-0" />
+                Please contact the admissions office for assistance.
+              </p>
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onPay}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+        >
+          <CreditCard size={15} />
+          Try Again
+        </button>
       </div>
     );
   }
