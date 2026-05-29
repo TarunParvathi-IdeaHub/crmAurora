@@ -6,7 +6,7 @@ export type ApplicationStatus =
   | "PAYMENT_COMPLETED"
   | "SUBMITTED";
 
-export type PaymentStatus = "PENDING" | "SUCCESS";
+export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED";
 
 // ── Form data slices ──────────────────────────────────────────────────────────
 
