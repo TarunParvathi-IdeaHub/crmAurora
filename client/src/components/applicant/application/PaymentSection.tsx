@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, CreditCard, PhoneCall, Send } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, CreditCard, PhoneCall, Send } from "lucide-react";
 import type { ApplicationStatus, PaymentStatus } from "@/types/applicant";
 
 const CONSENT_TEXT =
@@ -11,6 +11,7 @@ type PaymentSectionProps = {
   applicationStatus: ApplicationStatus;
   onPay: () => void;
   onSubmit: () => void;
+  onBack: () => void;
   isSubmitting: boolean;
   consentDeclaration: string;
   onConsentChange: (value: string) => void;
@@ -21,6 +22,7 @@ export default function PaymentSection({
   applicationStatus,
   onPay,
   onSubmit,
+  onBack,
   isSubmitting,
   consentDeclaration,
   onConsentChange,
@@ -84,6 +86,16 @@ export default function PaymentSection({
 
   return (
     <div className="space-y-4">
+      {/* Back button */}
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition"
+      >
+        <ArrowLeft size={15} />
+        Back
+      </button>
+
       {/* Payment Status Banner */}
       <div
         className={`rounded-2xl border p-4 ${
