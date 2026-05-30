@@ -78,6 +78,19 @@ const INITIAL_STATE: ApplicationFormState = {
   consentDeclaration: "",
 };
 
+// ── Degree level helpers ─────────────────────────────────────────────────────
+// Robust normalisation so variations like "Post Graduate (PG)" vs
+// "Post Graduation (PG)" both resolve correctly.
+
+function dlIsPG(dl: string): boolean {
+  const n = dl.toLowerCase();
+  return n.includes("post graduate") || n.includes("post graduation");
+}
+function dlIsPhd(dl: string): boolean {
+  const n = dl.toLowerCase();
+  return n.includes("doctor of philosophy") || n.includes("phd");
+}
+
 // ── Validation helpers ────────────────────────────────────────────────────────
 
 const NAME_RE = /^[A-Za-z\s]+$/;
@@ -122,11 +135,11 @@ function isStepComplete(step: number, state: ApplicationFormState, dl = ""): boo
     );
     if (!base) return false;
     // UG fields required only for PG and PhD applicants
-    const ugRequired = dl === "Post Graduation (PG)" || dl === "Doctor of Philosophy (Phd)";
+    const ugRequired = dlIsPG(dl) || dlIsPhd(dl);
     if (ugRequired) {
       if (!e.ugBoard || !e.ugInstitutionName || !e.ugHallTicketNo || !e.ugYearOfPassing || !e.ugPercentage) return false;
     }
-    const showPG = dl === "Doctor of Philosophy (Phd)" || e.hasPGDegree;
+    const showPG = dlIsPhd(dl) || e.hasPGDegree;
     if (showPG) {
       if (!e.pgBoard || !e.pgInstitutionName || !e.pgHallTicketNo || !e.pgYearOfPassing || !e.pgPercentage) return false;
     }
@@ -148,8 +161,8 @@ function isStepComplete(step: number, state: ApplicationFormState, dl = ""): boo
   }
   if (step === 3) {
     const d = state.documents;
-    const ugDocRequired = dl === "Post Graduation (PG)" || dl === "Doctor of Philosophy (Phd)";
-    const pgDocRequired = dl === "Doctor of Philosophy (Phd)";
+    const ugDocRequired = dlIsPG(dl) || dlIsPhd(dl);
+    const pgDocRequired = dlIsPhd(dl);
     return !!(
       d.aadharCard && d.sscMemo && d.intermediateMemo &&
       (!ugDocRequired || d.ugMemo) &&
@@ -251,7 +264,7 @@ function validateStep(
       errors.intermediatePercentage = "Percentage / CGPA should contain only numbers and dot.";
     }
     // UG required only for PG and PhD applicants
-    const ugRequired = dl === "Post Graduation (PG)" || dl === "Doctor of Philosophy (Phd)";
+    const ugRequired = dlIsPG(dl) || dlIsPhd(dl);
     if (ugRequired) {
       if (!e.ugBoard?.trim()) errors.ugBoard = "University / board is required.";
       if (!e.ugInstitutionName?.trim()) errors.ugInstitutionName = "Institution name is required.";
@@ -269,7 +282,7 @@ function validateStep(
       }
     }
     // PG required when PG section is shown
-    const showPG = dl === "Doctor of Philosophy (Phd)" || e.hasPGDegree;
+    const showPG = dlIsPhd(dl) || e.hasPGDegree;
     if (showPG) {
       if (!e.pgBoard?.trim()) errors.pgBoard = "University / board is required.";
       if (!e.pgInstitutionName?.trim()) errors.pgInstitutionName = "Institution name is required.";
@@ -303,8 +316,8 @@ function validateStep(
 
   if (step === 3) {
     const d = state.documents;
-    const ugDocRequired = dl === "Post Graduation (PG)" || dl === "Doctor of Philosophy (Phd)";
-    const pgDocRequired = dl === "Doctor of Philosophy (Phd)";
+    const ugDocRequired = dlIsPG(dl) || dlIsPhd(dl);
+    const pgDocRequired = dlIsPhd(dl);
     if (!d.aadharCard) errors.aadharCard = "Aadhaar card is required.";
     if (!d.sscMemo) errors.sscMemo = "SSC / 10th memo is required.";
     if (!d.intermediateMemo) errors.intermediateMemo = "Intermediate / 12th memo is required.";
@@ -569,8 +582,8 @@ function ApplicationPage() {
 
         // Degree level is the source of truth for showing UG/PG sections.
         // Must be true regardless of whether the student has filled the fields yet.
-        const ugRequired = level === "Post Graduation (PG)" || level === "Doctor of Philosophy (Phd)";
-        const pgRequired = level === "Doctor of Philosophy (Phd)";
+        const ugRequired = dlIsPG(level) || dlIsPhd(level);
+        const pgRequired = dlIsPhd(level);
 
         // Build document map from server signed URLs.
         // These are ALWAYS applied because persistDraft strips previewUrl to null
@@ -1220,6 +1233,7 @@ function ApplicationPage() {
                   applicationStatus={appState.applicationStatus}
                   onPay={handlePay}
                   onSubmit={handleSubmit}
+                  onBack={handleBack}
                   isSubmitting={isSubmitting}
                   consentDeclaration={appState.consentDeclaration}
                   onConsentChange={handleConsentChange}
