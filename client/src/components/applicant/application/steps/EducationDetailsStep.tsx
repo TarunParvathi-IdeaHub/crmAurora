@@ -76,8 +76,9 @@ export default function EducationDetailsStep({
   };
 
   // Derive UG/PG section visibility from degree level
-  const isPG = degreeLevel === "Post Graduation (PG)";
-  const isPhd = degreeLevel === "Doctor of Philosophy (Phd)";
+  const _dl = (degreeLevel ?? "").toLowerCase();
+  const isPG  = _dl.includes("post graduate") || _dl.includes("post graduation");
+  const isPhd = _dl.includes("doctor of philosophy") || _dl.includes("phd");
   const showUG = isPG || isPhd;   // UG: shown and mandatory for PG/PhD only
   const showPG = isPhd;           // PG: shown and mandatory for PhD only
   const ugRequired = isPG || isPhd;
@@ -406,4 +407,3 @@ export default function EducationDetailsStep({
     </div>
   );
 }
-
