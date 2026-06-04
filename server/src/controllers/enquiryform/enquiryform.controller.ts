@@ -9,7 +9,7 @@ const normalizeString = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
 
 const NAME_RE = /^[A-Za-z\s]+$/;
-const GMAIL_RE = /^[^\s@]+@gmail\.com$/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const MOBILE_RE = /^[6-9]\d{9}$/;
 
 const getEnquiryFormPayload = (body: Record<string, unknown>) => ({
