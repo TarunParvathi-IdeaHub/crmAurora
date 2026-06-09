@@ -42,33 +42,49 @@ export default function TemplatePreview({ content, sampleData }: TemplatePreview
             </h2>
           </div>
 
-          <div className="space-y-1.5 pl-2">
-            {section.items.map((item, index) => {
-              const bullet =
-                section.type === "numbered"
-                  ? `${index + 1}.`
-                  : section.type === "alphabetical"
-                  ? `${String.fromCharCode(97 + index)}.`
-                  : null;
+          <div className="space-y-2 pl-2">
+            {(() => {
+              let numberedCount = 0;
+              let alphabeticalCount = 0;
 
-              return (
-                <div key={item.id} className="flex items-start gap-2">
-                  {section.type === "checkbox" && (
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
-                      readOnly
-                    />
-                  )}
-                  {bullet && (
-                    <span className="mt-0.5 shrink-0 font-medium text-slate-700">{bullet}</span>
-                  )}
-                  <p className="leading-relaxed">
-                    {replaceVariables(item.content, data)}
-                  </p>
-                </div>
-              );
-            })}
+              return section.items.map((item) => {
+                let bullet: string | null = null;
+
+                if (item.type === "numbered") {
+                  numberedCount++;
+                  bullet = `${numberedCount}.`;
+                }
+
+                if (item.type === "alphabetical") {
+                  alphabeticalCount++;
+                  bullet = `${String.fromCharCode(
+                    96 + alphabeticalCount
+                  )}.`;
+                }
+
+                return (
+                  <div key={item.id} className="flex items-start gap-2">
+                    {item.type === "checkbox" && (
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
+                        readOnly
+                      />
+                    )}
+
+                    {bullet && (
+                      <span className="mt-0.5 shrink-0 font-medium text-slate-700">
+                        {bullet}
+                      </span>
+                    )}
+
+                    <p className="leading-relaxed">
+                      {replaceVariables(item.content, data)}
+                    </p>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       ))}

@@ -13,6 +13,7 @@ import {
   ToggleRight,
 } from "lucide-react";
 import { useRole } from "@/lib/hooks/useRole";
+import { authFetch } from "@/lib/utils/authFetch";
 
 type Institution = {
   id: string;
@@ -79,7 +80,7 @@ export default function StudyLevelManagementPage() {
     const loadInstitutions = async () => {
       if (role === "collegeAdmin") {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/institutions/current`, { credentials: "include" });
+          const response = await authFetch(`${API_BASE_URL}/api/institutions/current`);
           if (!response.ok) return;
           const data = await response.json() as { institution: Institution };
           if (data.institution) {
@@ -91,7 +92,7 @@ export default function StudyLevelManagementPage() {
         }
       } else {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/institutions`, { credentials: "include" });
+          const response = await authFetch(`${API_BASE_URL}/api/institutions`);
           if (!response.ok) return;
           const data = await response.json() as { institutions: Institution[] };
           setInstitutions(data.institutions ?? []);
@@ -114,9 +115,7 @@ export default function StudyLevelManagementPage() {
   useEffect(() => {
     const loadDegreeLevels = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/degree-levels`, {
-          credentials: "include",
-        });
+        const response = await authFetch(`${API_BASE_URL}/api/degree-levels`);
         if (!response.ok) {
           console.error('Failed to fetch study levels:', response.status, response.statusText);
           return;
@@ -168,10 +167,9 @@ export default function StudyLevelManagementPage() {
 
     try {
       if (editingId) {
-        const response = await fetch(`${API_BASE_URL}/api/degree-levels/${editingId}`, {
+        const response = await authFetch(`${API_BASE_URL}/api/degree-levels/${editingId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({
             levelName: formData.levelName.trim(),
             institutionId: formData.institutionId,
@@ -202,10 +200,9 @@ export default function StudyLevelManagementPage() {
         );
         resetForm(); // closes form
       } else {
-        const response = await fetch(`${API_BASE_URL}/api/degree-levels/create`, {
+        const response = await authFetch(`${API_BASE_URL}/api/degree-levels/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({
             levelName: formData.levelName.trim(),
             institutionId: formData.institutionId,
@@ -244,10 +241,9 @@ export default function StudyLevelManagementPage() {
   const handleDelete = async (id: string) => {
     setError("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/degree-levels/${id}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/degree-levels/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
       });
       const data = await response.json().catch(() => null) as { error?: string };
       if (!response.ok) {

@@ -29,6 +29,7 @@ export type BasicDetails = {
   pincode: string;
   presentAddress: string;
   permanentAddress: string;
+  isLocal: boolean;
   // Parents / Guardian
   fatherName: string;
   fatherMobileNo: string;
@@ -36,6 +37,9 @@ export type BasicDetails = {
   motherName: string;
   motherMobileNo: string;
   motherEmail: string;
+  guardianName: string;
+  guardianMobileNo: string;
+  guardianEmail: string;
 };
 
 export type EducationDetails = {
@@ -51,14 +55,14 @@ export type EducationDetails = {
   intermediateHallTicketNo: string;
   intermediateYearOfPassing: string;
   intermediatePercentage: string;
-  // UG (optional)
+  // UG 
   hasUGDegree: boolean;
   ugBoard: string;
   ugInstitutionName: string;
   ugHallTicketNo: string;
   ugYearOfPassing: string;
   ugPercentage: string;
-  // PG (optional)
+  // PG 
   hasPGDegree: boolean;
   pgBoard: string;
   pgInstitutionName: string;
@@ -88,6 +92,8 @@ export type DocumentFile = {
 
 export type UploadedDocuments = {
   aadharCard: DocumentFile;
+  passportPhoto: DocumentFile;
+  studentSignature: DocumentFile;
   sscMemo: DocumentFile;
   intermediateMemo: DocumentFile;
   ugMemo: DocumentFile;

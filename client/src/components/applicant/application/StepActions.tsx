@@ -6,6 +6,7 @@ type StepActionsProps = {
   currentStep: number;
   totalSteps: number;
   isSaving: boolean;
+  hasErrors?: boolean;
   onBack: () => void;
   onSaveDraft: () => void;
   onNext: () => void;
@@ -15,6 +16,7 @@ export default function StepActions({
   currentStep,
   totalSteps,
   isSaving,
+  hasErrors = false,
   onBack,
   onSaveDraft,
   onNext,
@@ -48,8 +50,13 @@ export default function StepActions({
           <button
             type="button"
             onClick={onNext}
-            disabled={isSaving}
-            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+            disabled={isSaving || hasErrors}
+            title={hasErrors ? "❌ Please fix all errors before proceeding to next step" : ""}
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-white transition ${
+              isSaving || hasErrors
+                ? "cursor-not-allowed bg-slate-400 opacity-60"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
             Next
             <ArrowRight size={15} />

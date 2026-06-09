@@ -23,6 +23,21 @@ export const adminInstituteMenu: MenuItem[] = [
   { id: "reports",              label: "Reports",              icon: BarChart3,       path: "/modules/management/reports" },
 ];
 
+// ─── Admin: Reports ─────────────────────────────────────────────────────────
+
+export const adminReportsMenu: MenuItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { id: "reports", label: "Reports", icon: BarChart3, path: "/modules/management/reports" },
+];
+
+// ─── Admin: Roles & Permissions ─────────────────────────────────────────────
+
+export const adminRolesPermissionsMenu: MenuItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { id: "roles", label: "Role Management", icon: ShieldCheck, path: "/modules/management/roles" },
+  { id: "permissions", label: "Permissions", icon: ShieldCheck, path: "/modules/management/permissions" },
+];
+
 // ─── Admin: User Management  ─── //
 
 export const adminUserMenu: MenuItem[] = [

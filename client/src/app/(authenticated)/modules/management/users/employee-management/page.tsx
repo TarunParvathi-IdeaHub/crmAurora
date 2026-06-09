@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ban, CheckCircle2, EllipsisVertical, Search, Trash2 } from "lucide-react";
 import { useRole } from "@/lib/hooks/useRole";
+import { authFetch } from "@/lib/utils/authFetch";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
@@ -49,7 +50,7 @@ export default function EmployeeManagementPage() {
 
   useEffect(() => {
     if (role === "collegeAdmin") {
-      fetch(`${API_BASE_URL}/api/institutions/current`, { credentials: "include" })
+      authFetch(`${API_BASE_URL}/api/institutions/current`)
         .then((r) => r.json())
         .then((d: { institution?: Institution }) => {
           if (d.institution) {
@@ -59,7 +60,7 @@ export default function EmployeeManagementPage() {
         })
         .catch(() => {});
     } else {
-      fetch(`${API_BASE_URL}/api/institutions`, { credentials: "include" })
+      authFetch(`${API_BASE_URL}/api/institutions`)
         .then((r) => r.json())
         .then((d) => setInstitutions(d.institutions ?? []))
         .catch(() => {});
@@ -75,7 +76,7 @@ export default function EmployeeManagementPage() {
           ? `${API_BASE_URL}/api/employees/all/${encodeURIComponent(filterInstitutionId)}`
           : `${API_BASE_URL}/api/employees/all`;
 
-        const resp = await fetch(url, { credentials: "include" });
+        const resp = await authFetch(url);
         const data = (await resp.json().catch(() => ({}))) as
           | { success?: boolean; employees?: EmployeeRow[]; data?: EmployeeRow[]; message?: string }
           | EmployeeRow[];
@@ -139,10 +140,9 @@ export default function EmployeeManagementPage() {
     setActionLoadingId(key);
     setError("");
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/employees/update`, {
+      const resp = await authFetch(`${API_BASE_URL}/api/employees/update`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ empId, designation, isActive }),
       });
       const data = (await resp.json().catch(() => null)) as { message?: string } | null;
@@ -174,10 +174,9 @@ export default function EmployeeManagementPage() {
     setActionLoadingId(key);
     setError("");
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/employees/dashboard`, {
+      const resp = await authFetch(`${API_BASE_URL}/api/employees/dashboard`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ empId, designation }),
       });
       const data = (await resp.json().catch(() => null)) as { message?: string } | null;

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRole } from "@/lib/hooks/useRole";
+import { authFetch } from "@/lib/utils/authFetch";
 
 type Mode = "create" | "edit";
 
@@ -50,7 +51,7 @@ const API_BASE_URL =
 const emailDomains = ["@gmail.com", "@aurora.edu.in", "@yahoo.com"] as const;
 
 const fieldValidationMessages = {
-  departmentCode: "Department code can contain only letters.",
+  departmentCode: "Department code can contain only letters, numbers, and hyphens.",
   departmentName: "Department name can contain only letters and spaces.",
   email: "Email can contain only letters, numbers, dots, and @.",
 } as const;
@@ -58,7 +59,7 @@ const fieldValidationMessages = {
 const fieldSanitizers = {
   institutionId: (value: string) => value,
   schoolId: (value: string) => value,
-  departmentCode: (value: string) => value.replace(/[^A-Za-z\s]/g, ""),
+  departmentCode: (value: string) => value.replace(/[^A-Za-z0-9\-]/g, ""),
   departmentName: (value: string) => value.replace(/[^A-Za-z\s]/g, ""),
   phone: (value: string) => value.replace(/\D/g, "").slice(0, 10),
   email: (value: string) => value.replace(/[^A-Za-z0-9.@]/g, ""),
@@ -66,7 +67,7 @@ const fieldSanitizers = {
 } as const;
 
 const fieldValidators = {
-  departmentCode: /^[A-Za-z\s]+$/,
+  departmentCode: /^[A-Za-z0-9\-]+$/,
   departmentName: /^[A-Za-z\s]+$/,
   email: /^[A-Za-z0-9.]+@[A-Za-z0-9.]+\.[A-Za-z]{2,}$/, 
 } as const;
@@ -129,7 +130,7 @@ export default function ManagementDepartmentPage() {
     const load = async () => {
       if (role === "collegeAdmin") {
         try {
-          const resp = await fetch(`${API_BASE_URL}/api/institutions/current`, { credentials: "include" });
+          const resp = await authFetch(`${API_BASE_URL}/api/institutions/current`);
           if (!resp.ok) return;
           const data = await resp.json() as { institution: Institution & { code?: string } };
           if (data.institution) {
@@ -147,7 +148,7 @@ export default function ManagementDepartmentPage() {
         }
       } else {
         try {
-          const resp = await fetch(`${API_BASE_URL}/api/institutions`, { credentials: "include" });
+          const resp = await authFetch(`${API_BASE_URL}/api/institutions`);
           if (!resp.ok) return;
           const data = await resp.json() as { institutions: (Institution & { code?: string; isActive?: boolean })[] };
           setInstitutions(
@@ -181,7 +182,7 @@ export default function ManagementDepartmentPage() {
     }
     const load = async () => {
       try {
-        const resp = await fetch(`${API_BASE_URL}/api/schools/by-institution/${formData.institutionId}`, { credentials: "include" });
+        const resp = await authFetch(`${API_BASE_URL}/api/schools/by-institution/${formData.institutionId}`);
         if (!resp.ok) return;
         const data = await resp.json() as { schools: { id: string; schoolCode: string; name: string; institutionId: string }[] };
         setSchoolsForForm(
@@ -203,7 +204,7 @@ export default function ManagementDepartmentPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const resp = await fetch(`${API_BASE_URL}/api/departments`, { credentials: "include" });
+        const resp = await authFetch(`${API_BASE_URL}/api/departments`);
         if (!resp.ok) return;
         const data = await resp.json() as {
           departments: {
@@ -355,10 +356,9 @@ export default function ManagementDepartmentPage() {
 
     if (mode === "create") {
       try {
-        const resp = await fetch(`${API_BASE_URL}/api/departments/create`, {
+        const resp = await authFetch(`${API_BASE_URL}/api/departments/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify(payload),
         });
         const data = await resp.json().catch(() => null) as { error?: string; department?: { id: string; departmentCode: string; departmentName?: string; name?: string; schoolId?: string; phone?: string; phoneNumber?: string; email?: string } | null };
@@ -400,10 +400,9 @@ export default function ManagementDepartmentPage() {
     }
 
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/departments/update`, {
+      const resp = await authFetch(`${API_BASE_URL}/api/departments/update`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ id: selectedDepartment.id, ...payload, isActive: formData.isActive }),
       });
       const data = await resp.json().catch(() => null) as { error?: string; department?: { id: string; departmentCode: string; departmentName?: string; name?: string; schoolId?: string; phone?: string; phoneNumber?: string; email?: string; isActive?: boolean } };
@@ -442,10 +441,9 @@ export default function ManagementDepartmentPage() {
   const handleDelete = async (departmentId: string) => {
     setError("");
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/departments/delete`, {
+      const resp = await authFetch(`${API_BASE_URL}/api/departments/delete`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ id: departmentId }),
       });
       const data = await resp.json().catch(() => null) as { error?: string };

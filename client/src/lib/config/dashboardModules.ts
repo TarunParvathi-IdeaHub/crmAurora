@@ -148,14 +148,14 @@ const admissionInchargeModules: DashboardModule[] = [
   {
     id: "admissions",
     title: "Admissions",
-    description: "Review applicants and manage undertaking templates.",
+    description: "Review applicants & manage undertaking templates.",
     icon: FileText,
     path: "/modules/crm/admissions",
   },
   {
     id: "aurum-exam-management",
     title: "AURUM Exam Management",
-    description: "Manage entrance exam scheduling and results.",
+    description: "Manage entrance exam scheduling and results",
     icon: Users,
     path: "/modules/crm/aurum",
   },
@@ -169,7 +169,7 @@ const admissionInchargeModules: DashboardModule[] = [
   {
     id: "reports",
     title: "Reports",
-    description: "View counsellor and consultant performance reports.",
+    description: "View counsellor & consultant performance reports.",
     icon: BarChart3,
     path: "/modules/crm/reports",
   },
@@ -186,7 +186,7 @@ const admissionConsultantModules: DashboardModule[] = [
   {
     id: "admissions",
     title: "Admissions",
-    description: "Review applicants and manage undertaking templates.",
+    description: "Review applicants & manage undertaking templates.",
     icon: FileText,
     path: "/modules/crm/admissions",
   },  
@@ -210,7 +210,7 @@ const admissionCounsellorModules: DashboardModule[] = [
   {
     id: "admissions",
     title: "Admissions",
-    description: "Review applicants and manage undertaking templates.",
+    description: "Review applicants & manage undertaking templates.",
     icon: FileText,
     path: "/modules/crm/admissions",
   },
@@ -228,7 +228,7 @@ const applicantModules: DashboardModule[] = [
     id: "my-application",
     title: "My Application",
     description:
-      "Fill and track your admission application, documents, and verification status.",
+      "Fill and track your admission application, documents & verification status.",
     icon: FileText,
     path: "/modules/crm/applicants/application",
   },
@@ -244,7 +244,7 @@ const applicantModules: DashboardModule[] = [
     id: "undertaking",
     title: "Undertaking",
     description:
-      "Review and sign the undertaking documents required to complete your admission.",
+      "Review &sign the undertaking documents required to complete your admission.",
     icon: ClipboardCheck,
     path: "/modules/crm/applicants/undertaking",
   },

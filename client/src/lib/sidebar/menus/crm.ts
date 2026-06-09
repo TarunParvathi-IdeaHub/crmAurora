@@ -47,7 +47,7 @@ export const admissionCounsellorDefaultMenu: MenuItem[] = [
 
 // ─── CRM Sub-Module: Admissions ───────────────────────────────────────────────
 
-export const admissionsMenu: MenuItem[] = [
+export const admissionsMenuDirector: MenuItem[] = [
   { id: "dashboard",              label: "Dashboard",               icon: LayoutDashboard, path: "/dashboard"},
   { id: "batch",  label: "Batch",   icon: CheckCircle2,    path: "/modules/crm/admissions/batch" },
   { id: "admission-cycle",         label: "Admission Cycle", icon: Calendar,        path: "/modules/crm/admissions/admission-cycle" },
@@ -56,6 +56,14 @@ export const admissionsMenu: MenuItem[] = [
   { id: "ug-application",     label: "UG Applications",    icon: GraduationCap, path: "/modules/crm/admissions/ug" },
   { id: "pg-application",     label: "PG Applications",    icon: BookOpen,      path: "/modules/crm/admissions/pg" },
   { id: "phd-application",    label: "Phd Applications",   icon: Microscope,    path: "/modules/crm/admissions/phd" },
+];
+
+export const admissionsMenuCounsellor: MenuItem[] = [
+  { id: "dashboard",          label: "Dashboard",           icon: LayoutDashboard, path: "/dashboard"},
+  { id: "review-applications", label: "Review Applications", icon: FileSearch,      path: "/modules/crm/admissions/review" },
+  { id: "ug-application",      label: "UG Applications",    icon: GraduationCap,   path: "/modules/crm/admissions/ug" },
+  { id: "pg-application",      label: "PG Applications",    icon: BookOpen,        path: "/modules/crm/admissions/pg" },
+  { id: "phd-application",     label: "Phd Applications",   icon: Microscope,      path: "/modules/crm/admissions/phd" },
 ];
 
 // ─── CRM Sub-Module: Enquiry ──────────────────────────────────────────────────

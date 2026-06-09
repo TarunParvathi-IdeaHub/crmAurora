@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   ClipboardCheck,
   Lock,
@@ -15,6 +16,32 @@ import {
 import Card from "@/components/common/Card";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
+import { useProfile } from "@/providers/ProfileProvider";
+import TemplatePreview from "@/app/(authenticated)/modules/crm/admissions/undertaking-templates/TemplatePreview";
+import type { UndertakingTemplateContent } from "@/app/(authenticated)/modules/crm/admissions/undertaking-templates/types";
+
+type PaymentStatus = "SUCCESS" | "FAILED" | "PENDING";
+
+type ApplicationData = {
+  id: string;
+  applicationNumber?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  admissionNumber?: string | null;
+  program?: { id?: string | null; programName?: string | null } | null;
+  admissionCycle?: { admissionCycleName?: string | null } | null;
+}; 
+
+type UndertakingTemplateResponse = {
+  template?: {
+    title: string;
+    version: string;
+    content: UndertakingTemplateContent;
+  };
+};
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
 
 const staggerList: Variants = {
   hidden: { opacity: 1 },
@@ -85,6 +112,102 @@ const clauseItems = [
 ];
 
 export default function UndertakingPage() {
+  const { profile } = useProfile();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [template, setTemplate] = useState<UndertakingTemplateContent | null>(null);
+  const [templateTitle, setTemplateTitle] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("PENDING");
+  const [sampleData, setSampleData] = useState<Record<string, string>>({});
+
+  const isUnlocked = paymentStatus === "SUCCESS";
+
+  useEffect(() => {
+    const appId = profile?.applicationId ?? undefined;
+    const institutionId = profile?.institution?.id ?? undefined;
+
+    if (!appId || !institutionId) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadUndertaking() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [appRes, feeRes] = await Promise.all([
+          fetch(`${API_BASE}/api/student-application/get/${appId}`, {
+            credentials: "include",
+          }),
+          fetch(`${API_BASE}/api/application-fee/status/${appId}`, {
+            credentials: "include",
+          }).catch(() => null),
+        ]);
+
+        const appJson = (await appRes.json()) as { data?: ApplicationData };
+        const appData = appJson.data;
+
+        const feeJson = feeRes && feeRes.ok ? await feeRes.json() : null;
+        const status: PaymentStatus =
+          feeJson?.paymentStatus === "SUCCESS"
+            ? "SUCCESS"
+            : feeJson?.paymentStatus === "FAILED"
+            ? "FAILED"
+            : "PENDING";
+
+        if (cancelled) return;
+
+        setPaymentStatus(status);
+
+        const fullName = `${appData?.firstName ?? ""} ${appData?.lastName ?? ""}`.trim();
+        setSampleData({
+          nameOfTheStudent: fullName,
+          applicationId: appData?.applicationNumber ?? appId,
+          programEnrolling: appData?.program?.programName ?? "",
+          admissionNo: appData?.admissionNumber ?? "",
+        });
+
+        const programId = appData?.program?.id;
+        if (!programId) {
+          setTemplate(null);
+          setTemplateTitle(null);
+          return;
+        }
+
+        const templateRes = await fetch(
+          `${API_BASE}/api/undertaking-templates/by-program?institutionId=${encodeURIComponent(
+            institutionId
+          )}&programId=${encodeURIComponent(programId)}`,
+          { credentials: "include" }
+        );
+
+        if (cancelled) return;
+
+        if (templateRes.ok) {
+          const templateJson = (await templateRes.json()) as UndertakingTemplateResponse;
+          setTemplate(templateJson.template?.content ?? null);
+          setTemplateTitle(templateJson.template?.title ?? null);
+        } else {
+          setTemplate(null);
+          setTemplateTitle(null);
+        }
+      } catch {
+        if (!cancelled) setError("Failed to load undertaking details.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadUndertaking();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile]);
+
   return (
     <motion.div
       initial="hidden"
@@ -107,28 +230,82 @@ export default function UndertakingPage() {
               </div>
             </div>
             <div className="shrink-0 rounded-2xl border border-white/20 bg-white/10 px-6 py-4 text-center backdrop-blur-sm">
-              <Lock size={26} className="mx-auto text-white/70" />
-              <p className="mt-2 text-sm font-semibold">Locked</p>
-              <p className="mt-0.5 text-xs text-emerald-100">Complete steps below to unlock</p>
+              {isUnlocked ? (
+                <CheckCircle2 size={26} className="mx-auto text-white" />
+              ) : (
+                <Lock size={26} className="mx-auto text-white/70" />
+              )}
+              <p className="mt-2 text-sm font-semibold">{isUnlocked ? "Unlocked" : "Locked"}</p>
+              <p className="mt-0.5 text-xs text-emerald-100">
+                {isUnlocked ? "You can view the undertaking now." : "Pay the fee to unlock"}
+              </p>
             </div>
           </div>
         </Card>
       </motion.div>
 
-      {/* Lock notice */}
-      <motion.div variants={slideItem}>
-        <div className="flex items-start gap-4 rounded-2xl border border-slate-200 bg-slate-100 p-5">
-          <Lock size={22} className="mt-0.5 shrink-0 text-slate-500" />
-          <div>
-            <p className="font-semibold text-slate-800">Undertaking form is currently locked</p>
-            <p className="mt-1 text-sm text-slate-600">
-              This form will be unlocked once your application is submitted, documents are
-              verified, and provisional admission is confirmed by the admissions team. Track
-              your progress in the steps below.
-            </p>
+      {loading && (
+        <motion.div variants={slideItem}>
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+            Loading undertaking details...
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
+
+      {!loading && error && (
+        <motion.div variants={slideItem}>
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">
+            {error}
+          </div>
+        </motion.div>
+      )}
+
+      {!loading && !error && isUnlocked && template && (
+        <motion.div variants={slideItem}>
+          <Card className="p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Undertaking Template
+                </p>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {templateTitle ?? "Student Admission Undertaking"}
+                </h2>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                <CheckCircle2 size={12} />
+                Fee Paid
+              </span>
+            </div>
+            <TemplatePreview content={template} sampleData={sampleData} />
+          </Card>
+        </motion.div>
+      )}
+
+      {!loading && !error && isUnlocked && !template && (
+        <motion.div variants={slideItem}>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+            Your undertaking form is not published yet. Please wait for the admissions team to
+            publish it for your programme.
+          </div>
+        </motion.div>
+      )}
+
+      {/* Lock notice */}
+      {!loading && !error && !isUnlocked && (
+        <motion.div variants={slideItem}>
+          <div className="flex items-start gap-4 rounded-2xl border border-slate-200 bg-slate-100 p-5">
+            <Lock size={22} className="mt-0.5 shrink-0 text-slate-500" />
+            <div>
+              <p className="font-semibold text-slate-800">Undertaking form is currently locked</p>
+              <p className="mt-1 text-sm text-slate-600">
+                This form will be unlocked after your application fee payment is successful and
+                the admissions team publishes the undertaking for your programme.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Steps to unlock + What is undertaking */}
       <motion.div variants={slideItem} className="grid gap-5 lg:grid-cols-2">
@@ -203,25 +380,27 @@ export default function UndertakingPage() {
       </motion.div>
 
       {/* CTA */}
-      <motion.div variants={slideItem}>
-        <Card className="border-emerald-100 bg-emerald-50 p-6">
-          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-emerald-800">Ready to get started?</p>
-              <p className="mt-0.5 text-sm text-emerald-700">
-                Begin with your application to unlock the undertaking form.
-              </p>
+      {!loading && !error && !isUnlocked && (
+        <motion.div variants={slideItem}>
+          <Card className="border-emerald-100 bg-emerald-50 p-6">
+            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-emerald-800">Ready to get started?</p>
+                <p className="mt-0.5 text-sm text-emerald-700">
+                  Complete your application fee payment to unlock the undertaking form.
+                </p>
+              </div>
+              <Link
+                href="/modules/crm/applicants/application"
+                className="shrink-0 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                <FileSignature size={15} />
+                Go to Payment
+              </Link>
             </div>
-            <Link
-              href="/modules/crm/applicants/application"
-              className="shrink-0 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
-            >
-              <FileSignature size={15} />
-              Start My Application
-            </Link>
-          </div>
-        </Card>
-      </motion.div>
+          </Card>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

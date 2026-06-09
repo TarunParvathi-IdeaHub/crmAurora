@@ -1,7 +1,8 @@
 import { adminUserMenu } from "./menus/admin";
 import { collegeAdminUserMenu } from "./menus/collegeAdmin";
 import {
-  admissionsMenu,
+  admissionsMenuDirector,
+  admissionsMenuCounsellor,
   enquiryMenu,
   aurumMenu,
   programFeeMenu,
@@ -9,6 +10,7 @@ import {
   crmReportsMenu,
   applicantMgmtMenu,
 } from "./menus/crm";
+import { adminRolesPermissionsMenu } from "./menus/admin";
 import type { ModuleRoute } from "./types";
 
 /**
@@ -23,6 +25,18 @@ import type { ModuleRoute } from "./types";
  *   pathname.startsWith(routePrefix) → use this menu (if role matches)
  */
 export const moduleRegistry: ModuleRoute[] = [
+
+  // ── Admin: Roles & Permissions sub-module ────────────────────────────────
+  {
+    routePrefix: "/modules/management/roles",
+    roles: ["admin", "collegeAdmin"],
+    menu: adminRolesPermissionsMenu,
+  },
+  {
+    routePrefix: "/modules/management/permissions",
+    roles: ["admin", "collegeAdmin"],
+    menu: adminRolesPermissionsMenu,
+  },
 
   // ── Admin: User Management ─────────────────────────────────────────────────
   {
@@ -41,8 +55,13 @@ export const moduleRegistry: ModuleRoute[] = [
   // ── CRM: Admissions sub-module ─────────────────────────────────────────────
   {
     routePrefix: "/modules/crm/admissions",
-    roles: ["admissionDirector", "admissionIncharge", "admissionConsultant", "admissionCounsellor"],
-    menu: admissionsMenu,
+    roles: ["admissionDirector", "admissionIncharge"],
+    menu: admissionsMenuDirector,
+  },
+  {
+    routePrefix: "/modules/crm/admissions",
+    roles: ["admissionConsultant", "admissionCounsellor"],
+    menu: admissionsMenuCounsellor,
   },
 
   // ── CRM: Leads (enquiry sub-pages) ────────────────────────────────────────

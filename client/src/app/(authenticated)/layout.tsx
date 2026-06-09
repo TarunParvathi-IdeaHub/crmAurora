@@ -13,20 +13,26 @@ type AuthenticatedLayoutProps = { children: ReactNode };
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const isModulesRoute = pathname.startsWith("/modules");
   const isDashboard = pathname === "/dashboard";
   const isFullWidthRoute = pathname === "/profile" || pathname === "/settings";
+  const isChangePasswordRoute = pathname === "/change-password";
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.replace("/login");
+      return;
+    }
+
+    if (!isLoading && isAuthenticated && user?.isFirstLogin && !isChangePasswordRoute) {
+      router.replace('/change-password');
     }
     // router is a stable singleton in Next.js App Router — safe to omit from deps.
     // Including it caused the effect to re-run on every router reference change,
     // triggering a redirect before useAuth had a chance to read localStorage.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, isChangePasswordRoute, user?.isFirstLogin]);
 
   if (isLoading) {
     return (

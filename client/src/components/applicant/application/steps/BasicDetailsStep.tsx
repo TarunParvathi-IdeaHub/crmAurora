@@ -1,6 +1,7 @@
 "use client";
 
-import type { BasicDetails } from "@/types/applicant";
+import type { BasicDetails, DocumentFile } from "@/types/applicant";
+import { getIndianCurrentYear } from "@/lib/utils/admissionDateRules";
 
 // ── Static reference data ─────────────────────────────────────────────────────
 
@@ -58,14 +59,22 @@ const textareaCls =
 type BasicDetailsStepProps = {
   data: BasicDetails;
   errors: Record<string, string>;
+  aadharCardDocument: DocumentFile;
   onChange: (updates: Partial<BasicDetails>) => void;
+  onAadharCardFileChange: (file: File | null) => void;
+  dobMax?: string;
 };
 
 export default function BasicDetailsStep({
   data,
   errors,
+  aadharCardDocument,
   onChange,
+  onAadharCardFileChange,
+  dobMax,
 }: BasicDetailsStepProps) {
+  const maxDob = `${getIndianCurrentYear()}-12-31`;
+
   const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     let nextValue = value;
@@ -75,6 +84,7 @@ export default function BasicDetailsStep({
       case "lastName":
       case "fatherName":
       case "motherName":
+      case "guardianName":
         nextValue = value.replace(ONLY_ALPHA_SPACE, "");
         break;
       case "caste":
@@ -93,6 +103,7 @@ export default function BasicDetailsStep({
       case "mobileNo":
       case "fatherMobileNo":
       case "motherMobileNo":
+      case "guardianMobileNo":
         nextValue = value.replace(ONLY_DIGITS, "").slice(0, 10);
         break;
       default:
@@ -101,6 +112,21 @@ export default function BasicDetailsStep({
 
     onChange({ [name]: nextValue });
   };
+
+  const handleAadharUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    onAadharCardFileChange(file);
+  };
+
+  const handleCopyAddress = (checked: boolean) => {
+    if (checked) onChange({ permanentAddress: data.presentAddress });
+    else onChange({ permanentAddress: "" });
+  };
+
+  const localAadharError =
+    data.aadharNo && data.aadharNo.trim().length > 0 && data.aadharNo.trim().length !== 12
+      ? "Aadhaar number must be 12 digits."
+      : undefined;
 
   return (
     <div className="space-y-8">
@@ -148,7 +174,7 @@ export default function BasicDetailsStep({
             name="dateOfBirth"
             value={data.dateOfBirth}
             onChange={handle}
-            max={new Date().toISOString().split("T")[0]}
+            max={maxDob}
             className={errors.dateOfBirth ? errorInputCls : inputCls}
           />
           <FieldError message={errors.dateOfBirth} />
@@ -208,7 +234,7 @@ export default function BasicDetailsStep({
       {/* Aadhar, Blood Group */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label>Aadhaar Number</Label>
+          <Label required>Aadhaar Number</Label>
           <input
             type="text"
             name="aadharNo"
@@ -218,25 +244,48 @@ export default function BasicDetailsStep({
             maxLength={12}
             inputMode="numeric"
             pattern="\d*"
-            className={inputCls}
+            className={errors.aadharNo ? errorInputCls : inputCls}
           />
-          <FieldError message={errors.aadharNo} />
+          <FieldError message={errors.aadharNo || localAadharError} />
         </div>
         <div>
-          <Label>Blood Group</Label>
-          <select name="bloodGroup" value={data.bloodGroup} onChange={handle} className={selectCls}>
+          <Label required>Upload Aadhaar Card</Label>
+          <div className="flex items-center gap-3">
+            <label htmlFor="aadharCard" className="inline-flex cursor-pointer items-center rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-400 hover:bg-white">
+              Choose file
+            </label>
+            <input
+              id="aadharCard"
+              name="aadharCard"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={handleAadharUpload}
+              className="sr-only"
+            />
+            <span className="min-w-0 truncate text-sm text-slate-500">
+              {aadharCardDocument?.name || "No file chosen"}
+            </span>
+          </div>
+          <FieldError message={errors.aadharCard} />
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label required>Blood Group</Label>
+          <select name="bloodGroup" value={data.bloodGroup} onChange={handle} className={errors.bloodGroup ? errorInputCls : selectCls}>
             <option value="">— Select —</option>
             {BLOOD_GROUPS.map((bg) => (
               <option key={bg} value={bg}>{bg}</option>
             ))}
           </select>
+          <FieldError message={errors.bloodGroup} />
         </div>
       </div>
 
       {/* Caste, Sub-Caste */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label>Caste</Label>
+          <Label required>Caste</Label>
           <input
             type="text"
             name="caste"
@@ -244,20 +293,20 @@ export default function BasicDetailsStep({
             onChange={handle}
             placeholder="e.g., OC, BC-A, SC, ST"
             maxLength={60}
-            className={inputCls}
+            className={errors.caste ? errorInputCls : inputCls}
           />
           <FieldError message={errors.caste} />
         </div>
         <div>
-          <Label>Sub-Caste</Label>
+          <Label required>Sub-Caste</Label>
           <input
             type="text"
             name="subCaste"
             value={data.subCaste}
             onChange={handle}
-            placeholder="Sub-caste (if applicable)"
+            placeholder="Sub-caste"
             maxLength={60}
-            className={inputCls}
+            className={errors.subCaste ? errorInputCls : inputCls}
           />
           <FieldError message={errors.subCaste} />
         </div>
@@ -269,16 +318,17 @@ export default function BasicDetailsStep({
       {/* State, City, Pincode */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <Label>State</Label>
-          <select name="state" value={data.state} onChange={handle} className={selectCls}>
+          <Label required>State</Label>
+          <select name="state" value={data.state} onChange={handle} className={errors.state ? errorInputCls : selectCls}>
             <option value="">— Select —</option>
             {INDIAN_STATES.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          <FieldError message={errors.state} />
         </div>
         <div>
-          <Label>City</Label>
+          <Label required>City</Label>
           <input
             type="text"
             name="city"
@@ -286,12 +336,12 @@ export default function BasicDetailsStep({
             onChange={handle}
             placeholder="e.g., Hyderabad"
             maxLength={60}
-            className={inputCls}
+            className={errors.city ? errorInputCls : inputCls}
           />
           <FieldError message={errors.city} />
         </div>
         <div>
-          <Label>Pincode</Label>
+          <Label required>Pincode</Label>
           <input
             type="text"
             name="pincode"
@@ -301,7 +351,7 @@ export default function BasicDetailsStep({
             maxLength={6}
             inputMode="numeric"
             pattern="\d*"
-            className={inputCls}
+            className={errors.pincode ? errorInputCls : inputCls}
           />
           <FieldError message={errors.pincode} />
         </div>
@@ -309,7 +359,7 @@ export default function BasicDetailsStep({
 
       {/* Present Address */}
       <div>
-        <Label>Present Address</Label>
+        <Label required>Present Address</Label>
         <textarea
           name="presentAddress"
           value={data.presentAddress}
@@ -317,13 +367,26 @@ export default function BasicDetailsStep({
           placeholder="House / Flat No., Street, Area, City"
           maxLength={300}
           rows={3}
-          className={textareaCls}
+          className={errors.presentAddress ? errorInputCls : textareaCls}
         />
+        <FieldError message={errors.presentAddress} />
+      </div>
+
+      <div className="flex justify-end">
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={data.permanentAddress === data.presentAddress && data.presentAddress.trim().length > 0}
+            onChange={(e) => handleCopyAddress(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-blue-600"
+          />
+          <span>Same as present address</span>
+        </label>
       </div>
 
       {/* Permanent Address */}
       <div>
-        <Label>Permanent Address</Label>
+        <Label required>Permanent Address</Label>
         <textarea
           name="permanentAddress"
           value={data.permanentAddress}
@@ -331,19 +394,56 @@ export default function BasicDetailsStep({
           placeholder="Permanent / native address"
           maxLength={300}
           rows={3}
-          className={textareaCls}
+          className={errors.permanentAddress ? errorInputCls : textareaCls}
         />
+        <FieldError message={errors.permanentAddress} />
       </div>
 
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Residency status</p>
+            <p className="text-xs text-slate-500">Select whether you are a local resident or outstation resident.</p>
+          </div>
+          <div className="inline-flex rounded-full border border-slate-300 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => onChange({ isLocal: true })}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                data.isLocal ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              Local Resident
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange({ isLocal: false })}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                !data.isLocal ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              Outstation Resident
+            </button>
+          </div>
+        </div>
+        <p className="text-sm text-slate-600">
+          {data.isLocal
+            ? "Local residents should provide parent details and may optionally provide guardian information."
+            : "Outstation residents must provide guardian contact information below."}
+        </p>
+      </div>
+
+      {/* Parent / Guardian: Parent fields first, guardian shown afterwards for un-local applicants */}
+
       <hr className="border-slate-200" />
-      <SectionHeading title="Parent / Guardian Information" />
+      <SectionHeading title="Parent Details" />
 
       {/* Father */}
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Father</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <Label>Name</Label>
+            <Label required>Name</Label>
             <input
               type="text"
               name="fatherName"
@@ -351,12 +451,12 @@ export default function BasicDetailsStep({
               onChange={handle}
               placeholder="Father's full name"
               maxLength={100}
-              className={inputCls}
+              className={errors.fatherName ? errorInputCls : inputCls}
             />
             <FieldError message={errors.fatherName} />
           </div>
           <div>
-            <Label>Mobile Number</Label>
+            <Label required>Mobile Number</Label>
             <input
               type="tel"
               name="fatherMobileNo"
@@ -366,21 +466,22 @@ export default function BasicDetailsStep({
               maxLength={10}
               inputMode="numeric"
               pattern="\d*"
-              className={inputCls}
+              className={errors.fatherMobileNo ? errorInputCls : inputCls}
             />
             <FieldError message={errors.fatherMobileNo} />
           </div>
           <div>
-            <Label>Email</Label>
+            <Label required>Email</Label>
             <input
               type="email"
               name="fatherEmail"
               value={data.fatherEmail}
               onChange={handle}
-              placeholder="Father's email (optional)"
+              placeholder="Father's email"
               maxLength={100}
-              className={inputCls}
+              className={errors.fatherEmail ? errorInputCls : inputCls}
             />
+            <FieldError message={errors.fatherEmail} />
           </div>
         </div>
       </div>
@@ -390,7 +491,7 @@ export default function BasicDetailsStep({
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mother</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <Label>Name</Label>
+            <Label required>Name</Label>
             <input
               type="text"
               name="motherName"
@@ -398,12 +499,12 @@ export default function BasicDetailsStep({
               onChange={handle}
               placeholder="Mother's full name"
               maxLength={100}
-              className={inputCls}
+              className={errors.motherName ? errorInputCls : inputCls}
             />
             <FieldError message={errors.motherName} />
           </div>
           <div>
-            <Label>Mobile Number</Label>
+            <Label required>Mobile Number</Label>
             <input
               type="tel"
               name="motherMobileNo"
@@ -413,21 +514,81 @@ export default function BasicDetailsStep({
               maxLength={10}
               inputMode="numeric"
               pattern="\d*"
-              className={inputCls}
+              className={errors.motherMobileNo ? errorInputCls : inputCls}
             />
             <FieldError message={errors.motherMobileNo} />
           </div>
           <div>
-            <Label>Email</Label>
+            <Label required>Email</Label>
             <input
               type="email"
               name="motherEmail"
               value={data.motherEmail}
               onChange={handle}
-              placeholder="Mother's email (optional)"
+              placeholder="Mother's email"
               maxLength={100}
-              className={inputCls}
+              className={errors.motherEmail ? errorInputCls : inputCls}
             />
+            <FieldError message={errors.motherEmail} />
+          </div>
+        </div>
+      </div>
+      
+      <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+            Guardian Details
+          </span>
+        </div>
+        <p className="text-sm text-slate-600">
+          {data.isLocal
+            ? "Guardian details are optional for Local Resident applicants."
+            : "Guardian details are required for Outstation Resident applicants."}
+        </p>
+        <p className="text-xs text-slate-500">
+          Local Resident: optional; Outstation Resident: required.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label required={!data.isLocal}>Name</Label>
+            <input
+              type="text"
+              name="guardianName"
+              value={data.guardianName}
+              onChange={handle}
+              placeholder="Guardian's full name"
+              maxLength={100}
+              className={errors.guardianName ? errorInputCls : inputCls}
+            />
+            <FieldError message={errors.guardianName} />
+          </div>
+          <div>
+            <Label required={!data.isLocal}>Mobile Number</Label>
+            <input
+              type="tel"
+              name="guardianMobileNo"
+              value={data.guardianMobileNo}
+              onChange={handle}
+              placeholder="10-digit number"
+              maxLength={10}
+              inputMode="numeric"
+              pattern="\d*"
+              className={errors.guardianMobileNo ? errorInputCls : inputCls}
+            />
+            <FieldError message={errors.guardianMobileNo} />
+          </div>
+          <div>
+            <Label required={!data.isLocal}>Email</Label>
+            <input
+              type="email"
+              name="guardianEmail"
+              value={data.guardianEmail}
+              onChange={handle}
+              placeholder="Guardian's email"
+              maxLength={100}
+              className={errors.guardianEmail ? errorInputCls : inputCls}
+            />
+            <FieldError message={errors.guardianEmail} />
           </div>
         </div>
       </div>

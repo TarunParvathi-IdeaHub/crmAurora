@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { authFetch } from "@/lib/utils/authFetch";
 
 type Mode = "create" | "edit";
 
@@ -124,9 +125,8 @@ export default function ManagementDepartmentsPage() {
   useEffect(() => {
     const loadInstitutions = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/institutions`, {
+        const response = await authFetch(`${API_BASE_URL}/api/institutions`, {
           method: "GET",
-          credentials: "include",
         });
 
         if (!response.ok) {
@@ -281,10 +281,9 @@ export default function ManagementDepartmentsPage() {
 
     if (mode === "create") {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/institutions/create`, {
+        const response = await authFetch(`${API_BASE_URL}/api/institutions/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify(payload),
         });
 
@@ -319,10 +318,9 @@ export default function ManagementDepartmentsPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/institutions/${selectedInstitution.institutionCode}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/institutions/${selectedInstitution.institutionCode}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(payload),
       });
 
@@ -360,9 +358,8 @@ export default function ManagementDepartmentsPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/institutions/${institutionToDelete.institutionCode}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/institutions/${institutionToDelete.institutionCode}`, {
         method: "DELETE",
-        credentials: "include",
       });
 
       const data = await response.json().catch(() => null);

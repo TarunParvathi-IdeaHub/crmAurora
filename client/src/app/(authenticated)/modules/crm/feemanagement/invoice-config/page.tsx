@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { authFetch } from "@/lib/utils/authFetch";
 
 type Mode = "create" | "edit";
 
@@ -89,9 +90,7 @@ export default function FinanceConfigPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const resp = await fetch(`${API_BASE_URL}/api/institutions`, {
-          credentials: "include",
-        });
+        const resp = await authFetch(`${API_BASE_URL}/api/institutions`);
         if (!resp.ok) return;
         const data = (await resp.json()) as {
           institutions: (Institution & { isActive?: boolean })[];
@@ -110,10 +109,7 @@ export default function FinanceConfigPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const resp = await fetch(
-          `${API_BASE_URL}/api/institution-finance-config/getall`,
-          { credentials: "include" }
-        );
+        const resp = await authFetch(`${API_BASE_URL}/api/institution-finance-config/getall`);
         if (!resp.ok) {
           const body = (await resp.json().catch(() => null)) as { error?: string } | null;
           setError(body?.error ?? "Unable to load finance configurations.");
@@ -217,19 +213,15 @@ export default function FinanceConfigPage() {
 
     if (mode === "create") {
       try {
-        const resp = await fetch(
-          `${API_BASE_URL}/api/institution-finance-config/create`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              institutionId: formData.institutionId,
-              invoicePrefix: formData.invoicePrefix.trim(),
-              receiptPrefix: formData.receiptPrefix.trim(),
-            }),
-          }
-        );
+        const resp = await authFetch(`${API_BASE_URL}/api/institution-finance-config/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            institutionId: formData.institutionId,
+            invoicePrefix: formData.invoicePrefix.trim(),
+            receiptPrefix: formData.receiptPrefix.trim(),
+          }),
+        });
         const data = (await resp.json().catch(() => null)) as {
           error?: string;
           config?: RawConfig;
@@ -273,12 +265,11 @@ export default function FinanceConfigPage() {
     }
 
     try {
-      const resp = await fetch(
+      const resp = await authFetch(
         `${API_BASE_URL}/api/institution-finance-config/edit/${selectedConfig.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({
             institutionId: formData.institutionId,
             invoicePrefix: formData.invoicePrefix.trim(),

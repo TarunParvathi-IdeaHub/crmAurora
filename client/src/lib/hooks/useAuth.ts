@@ -9,6 +9,7 @@ type AuthUser = {
   email?: string;
   role?: Role;     // normalized camelCase (e.g. "collegeAdmin")
   rawRole?: string; // raw backend string (e.g. "College Admin") — used for API calls
+  isFirstLogin?: boolean;
   message?: string;
 };
 
@@ -34,6 +35,7 @@ export function useAuth() {
         email: toOptionalString(parsed.email),
         role: normalizeRole(parsed.role) ?? undefined,
         rawRole: toOptionalString(parsed.role),
+        isFirstLogin: Boolean(parsed.isFirstLogin),
         message: toOptionalString(parsed.message),
       });
     } catch {

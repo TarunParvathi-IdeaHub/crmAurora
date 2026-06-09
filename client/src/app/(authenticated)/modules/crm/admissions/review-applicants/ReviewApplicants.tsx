@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Users,
   Search,
@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { useProfile } from "@/providers/ProfileProvider";
 import { useRole } from "@/lib/hooks/useRole";
+import UploadDocumentsStep from "@/components/applicant/application/steps/UploadDocumentsStep";
+import type { DocumentFile, UploadedDocuments } from "@/types/applicant";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,6 +100,7 @@ type ApplicationDetail = {
   entranceExamRank: string | null;
   intrestedInAurumExam: boolean;
   applicationStatus_label?: string;
+  documents: Record<DocumentKey, string | null>;
   degreeLevel: { levelName: string };
   program: { programName: string; programCode?: string };
   admissionCycle: { admissionCycleName: string };
@@ -126,8 +129,57 @@ type EducationDetail = {
   ugPercentage: number | null;
   pgBoard: string | null;
   pgYearOfPassing: number | null;
+  pgHallTicketNo: string | null;
+  pgInstitutionName: string | null;
   pgPercentage: number | null;
 };
+
+type DocumentKey = keyof UploadedDocuments;
+
+const DOCUMENT_LABELS: Record<DocumentKey, string> = {
+  aadharCard: "Aadhaar Card",
+  photo: "Photograph",
+  signature: "Signature",
+  sscMemo: "SSC / 10th Memo",
+  intermediateMemo: "Intermediate / 12th Memo",
+  ugMemo: "UG Degree Certificate",
+  pgMemo: "PG Degree Certificate",
+  gapCertificate: "Gap Certificate",
+  bonafideCertificate: "Bonafide Certificate",
+  transferCertificate: "Transfer Certificate",
+};
+
+const DOCUMENT_KEYS: DocumentKey[] = [
+  "aadharCard",
+  "photo",
+  "signature",
+  "sscMemo",
+  "intermediateMemo",
+  "ugMemo",
+  "pgMemo",
+  "gapCertificate",
+  "bonafideCertificate",
+  "transferCertificate",
+];
+
+const EMPTY_DOCUMENTS: UploadedDocuments = {
+  aadharCard: null,
+  photo: null,
+  signature: null,
+  sscMemo: null,
+  intermediateMemo: null,
+  ugMemo: null,
+  pgMemo: null,
+  gapCertificate: null,
+  bonafideCertificate: null,
+  transferCertificate: null,
+};
+
+function buildDocumentFile(url: string | null, label: string): DocumentFile {
+  return url
+    ? { name: label, size: 0, previewUrl: url, file: null }
+    : null;
+}
 
 // ── Types (filter) ──────────────────────────────────────────────────────────
 
@@ -236,6 +288,71 @@ function InfoRow({ label, value }: { label: string; value: string | null | undef
   );
 }
 
+function FormRow({
+  label,
+  value,
+  onChange,
+  type = "text",
+  textarea = false,
+  rows = 3,
+}: {
+  label: string;
+  value: string | null | undefined;
+  onChange: (value: string) => void;
+  type?: string;
+  textarea?: boolean;
+  rows?: number;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-slate-500">{label}</label>
+      {textarea ? (
+        <textarea
+          value={value ?? ""}
+          rows={rows}
+          onChange={(e) => onChange(e.target.value)}
+          className="min-h-[68px] rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        />
+      ) : (
+        <input
+          type={type}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+        />
+      )}
+    </div>
+  );
+}
+
+function FormSelectRow({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string | null | undefined;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-slate-500">{label}</label>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+      >
+        <option value="">Select</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 // ── Props ────────────────────────────────────────────────────────────────────
 
 interface ReviewApplicantsProps {
@@ -271,6 +388,14 @@ export default function ReviewApplicants({
   const [editStatus, setEditStatus] = useState<ApplicationStatus>("SAVED_AS_DRAFT");
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
+  const [editDetail, setEditDetail] = useState<ApplicationDetail | null>(null);
+  const [editDocuments, setEditDocuments] = useState<UploadedDocuments>(EMPTY_DOCUMENTS);
+  const [editDetailLoading, setEditDetailLoading] = useState(false);
+  const [editDetailError, setEditDetailError] = useState("");
+
+  const handleDocumentChange = useCallback((updates: Partial<UploadedDocuments>) => {
+    setEditDocuments((prev) => ({ ...prev, ...updates }));
+  }, []);
 
   // 3-dots dropdown menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -278,9 +403,31 @@ export default function ReviewApplicants({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // If a `search` query param is provided (from Leads panel), prefill search and
+  // auto-open the application when it appears in the list.
+  useEffect(() => {
+    const s = searchParams?.get("search") ?? "";
+    if (s) setSearchQuery(s);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!searchQuery || applications.length === 0) return;
+    const q = searchQuery.toLowerCase().trim();
+    const match = applications.find((a) =>
+      (a.email ?? "").toLowerCase().includes(q) || (a.mobileNo ?? "").includes(q) || `${a.firstName} ${a.lastName}`.toLowerCase().includes(q)
+    );
+    if (match) {
+      // open edit for the matching application
+      openEdit(match);
+    }
+  }, [applications, searchQuery]);
 
   const isDirectorOrIncharge =
     role === "admissionDirector" || role === "admissionIncharge";
+  const canEditDocuments =
+    role !== "admissionCounsellor" && role !== "admissionConsultant";
 
   const colCount = isDirectorOrIncharge ? 8 : 7;
 
@@ -354,26 +501,148 @@ export default function ReviewApplicants({
     setEditApp(app);
     setEditStatus(app.applicationStatus);
     setEditError("");
+    setEditDetail(null);
+    setEditDocuments(EMPTY_DOCUMENTS);
+    setEditDetailError("");
+    setEditDetailLoading(true);
+
+    const setDocs = (documents: ApplicationDetail["documents"]) => {
+      setEditDocuments({
+        aadharCard: buildDocumentFile(documents.aadharCard, DOCUMENT_LABELS.aadharCard),
+        photo: buildDocumentFile(documents.photo, DOCUMENT_LABELS.photo),
+        signature: buildDocumentFile(documents.signature, DOCUMENT_LABELS.signature),
+        sscMemo: buildDocumentFile(documents.sscMemo, DOCUMENT_LABELS.sscMemo),
+        intermediateMemo: buildDocumentFile(documents.intermediateMemo, DOCUMENT_LABELS.intermediateMemo),
+        ugMemo: buildDocumentFile(documents.ugMemo, DOCUMENT_LABELS.ugMemo),
+        pgMemo: buildDocumentFile(documents.pgMemo, DOCUMENT_LABELS.pgMemo),
+        gapCertificate: buildDocumentFile(documents.gapCertificate, DOCUMENT_LABELS.gapCertificate),
+        bonafideCertificate: buildDocumentFile(documents.bonafideCertificate, DOCUMENT_LABELS.bonafideCertificate),
+        transferCertificate: buildDocumentFile(documents.transferCertificate, DOCUMENT_LABELS.transferCertificate),
+      });
+    };
+
+    if (detail?.id === app.id) {
+      setEditDetail(detail);
+      setDocs(detail.documents);
+      setEditDetailLoading(false);
+      return;
+    }
+
+    fetch(`${API_BASE}/api/student-application/get/${app.id}`, { credentials: "include" })
+      .then((r) => r.json() as Promise<{ data?: ApplicationDetail; error?: string }>)
+      .then((res) => {
+        if (res.error) {
+          setEditDetailError(res.error);
+        } else if (res.data) {
+          setEditDetail(res.data);
+          setDocs(res.data.documents);
+        } else {
+          setEditDetailError("Failed to load application details.");
+        }
+      })
+      .catch(() => setEditDetailError("Failed to load application details."))
+      .finally(() => setEditDetailLoading(false));
+  }
+
+  function updateEditDetail(field: keyof ApplicationDetail, value: string | boolean | null) {
+    setEditDetail((prev) => (prev ? { ...prev, [field]: value } : prev));
   }
 
   function saveEdit() {
-    if (!editApp || !profile) return;
+    if (!editApp || !profile || !editDetail) return;
     setEditSaving(true);
     setEditError("");
     const entityId = profile.entityId ?? "";
+
+    const formData = new FormData();
+    formData.append("applicationStatus", editStatus);
+    formData.append("firstName", editDetail.firstName ?? "");
+    formData.append("lastName", editDetail.lastName ?? "");
+    formData.append("email", editDetail.email ?? "");
+    formData.append("mobileNo", editDetail.mobileNo ?? "");
+    formData.append("gender", editDetail.gender ?? "");
+    formData.append("fatherName", editDetail.fatherName ?? "");
+    formData.append("fatherMobileNo", editDetail.fatherMobileNo ?? "");
+    formData.append("fatherEmail", editDetail.fatherEmail ?? "");
+    formData.append("motherName", editDetail.motherName ?? "");
+    formData.append("motherMobileNo", editDetail.motherMobileNo ?? "");
+    formData.append("motherEmail", editDetail.motherEmail ?? "");
+    formData.append("dateOfBirth", editDetail.dateOfBirth ? editDetail.dateOfBirth.split("T")[0] : "");
+    formData.append("aadharNo", editDetail.aadharNo ?? "");
+    formData.append("bloodGroup", editDetail.bloodGroup ?? "");
+    formData.append("caste", editDetail.caste ?? "");
+    formData.append("subCaste", editDetail.subCaste ?? "");
+    formData.append("state", editDetail.state ?? "");
+    formData.append("presentAddress", editDetail.presentAddress ?? "");
+    formData.append("permanentAddress", editDetail.permanentAddress ?? "");
+    formData.append("quallingEntranceExam", editDetail.quallingEntranceExam ?? "");
+    formData.append("entranceExamHallTicketNo", editDetail.entranceExamHallTicketNo ?? "");
+    formData.append("entranceExamRank", editDetail.entranceExamRank ?? "");
+    formData.append("intrestedInAurumExam", String(editDetail.intrestedInAurumExam));
+
+    for (const key of DOCUMENT_KEYS) {
+      const doc = editDocuments[key];
+      if (doc?.file) {
+        formData.append(key, doc.file, doc.name);
+      }
+    }
+
     fetch(`${API_BASE}/api/applications/${entityId}/${editApp.id}`, {
       method: "PUT",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ applicationStatus: editStatus }),
+      body: formData,
     })
-      .then((r) => r.json() as Promise<{ error?: string }>)
+      .then((r) => r.json() as Promise<{ error?: string; application?: Application }>)
       .then((res) => {
         if (res.error) {
           setEditError(res.error);
         } else {
           setApplications((prev) =>
-            prev.map((a) => a.id === editApp.id ? { ...a, applicationStatus: editStatus } : a)
+            prev.map((a) =>
+              a.id === editApp.id
+                ? {
+                    ...a,
+                    firstName: editDetail.firstName,
+                    lastName: editDetail.lastName,
+                    email: editDetail.email,
+                    mobileNo: editDetail.mobileNo,
+                    applicationStatus: editStatus,
+                    studyLevel: editDetail.degreeLevel?.levelName ?? a.studyLevel,
+                    programApplied: editDetail.program?.programName ?? a.programApplied,
+                    admissionCycle: editDetail.admissionCycle?.admissionCycleName ?? a.admissionCycle,
+                  }
+                : a
+            )
+          );
+          setViewApp((prev) =>
+            prev && prev.id === editApp.id
+              ? {
+                  ...prev,
+                  firstName: editDetail.firstName,
+                  lastName: editDetail.lastName,
+                  email: editDetail.email,
+                  mobileNo: editDetail.mobileNo,
+                  applicationStatus: editStatus,
+                  studyLevel: editDetail.degreeLevel?.levelName ?? prev.studyLevel,
+                  programApplied: editDetail.program?.programName ?? prev.programApplied,
+                  admissionCycle: editDetail.admissionCycle?.admissionCycleName ?? prev.admissionCycle,
+                }
+              : prev
+          );
+          setDetail((prev) =>
+            prev && prev.id === editApp.id
+              ? {
+                  ...prev,
+                  firstName: editDetail.firstName,
+                  lastName: editDetail.lastName,
+                  email: editDetail.email,
+                  mobileNo: editDetail.mobileNo,
+                  applicationStatus: editStatus,
+                  degreeLevel: editDetail.degreeLevel ?? prev.degreeLevel,
+                  program: editDetail.program ?? prev.program,
+                  admissionCycle: editDetail.admissionCycle ?? prev.admissionCycle,
+                }
+              : prev
           );
           setEditApp(null);
         }
@@ -689,99 +958,7 @@ export default function ReviewApplicants({
                   {detailError}
                 </div>
               ) : detail ? (
-                <div className="flex flex-col gap-6">
-                  {/* Programme info */}
-                  <Section icon={<GraduationCap size={15} />} title="Programme">
-                    <div className="grid grid-cols-2 gap-3">
-                      <InfoRow label="Study Level" value={detail.degreeLevel?.levelName} />
-                      <InfoRow label="Programme" value={detail.program?.programName} />
-                      <InfoRow label="Admission Cycle" value={detail.admissionCycle?.admissionCycleName} />
-                      <InfoRow label="Institution" value={detail.institution?.institutionName} />
-                    </div>
-                  </Section>
-
-                  {/* Personal details */}
-                  <Section icon={<User size={15} />} title="Personal Details">
-                    <div className="grid grid-cols-2 gap-3">
-                      <InfoRow label="First Name" value={detail.firstName} />
-                      <InfoRow label="Last Name" value={detail.lastName} />
-                      <InfoRow label="Date of Birth" value={detail.dateOfBirth ? new Date(detail.dateOfBirth).toLocaleDateString("en-IN") : null} />
-                      <InfoRow label="Gender" value={detail.gender} />
-                      <InfoRow label="Blood Group" value={detail.bloodGroup} />
-                      <InfoRow label="Aadhar No." value={detail.aadharNo} />
-                      <InfoRow label="Caste" value={detail.caste} />
-                      <InfoRow label="Sub-Caste" value={detail.subCaste} />
-                      <InfoRow label="State" value={detail.state} />
-                    </div>
-                  </Section>
-
-                  {/* Contact */}
-                  <Section icon={<Phone size={15} />} title="Contact">
-                    <div className="grid grid-cols-2 gap-3">
-                      <InfoRow label="Mobile" value={detail.mobileNo} />
-                      <InfoRow label="Email" value={detail.email} />
-                      <InfoRow label="Present Address" value={detail.presentAddress} />
-                      <InfoRow label="Permanent Address" value={detail.permanentAddress} />
-                    </div>
-                  </Section>
-
-                  {/* Parent details */}
-                  <Section icon={<Users size={15} />} title="Parent / Guardian">
-                    <div className="grid grid-cols-2 gap-3">
-                      <InfoRow label="Father Name" value={detail.fatherName} />
-                      <InfoRow label="Father Mobile" value={detail.fatherMobileNo} />
-                      <InfoRow label="Father Email" value={detail.fatherEmail} />
-                      <InfoRow label="Mother Name" value={detail.motherName} />
-                      <InfoRow label="Mother Mobile" value={detail.motherMobileNo} />
-                      <InfoRow label="Mother Email" value={detail.motherEmail} />
-                    </div>
-                  </Section>
-
-                  {/* Education */}
-                  {detail.studentEducationDetails?.length > 0 && (
-                    <Section icon={<BookOpen size={15} />} title="Education Details">
-                      {detail.studentEducationDetails.map((edu) => (
-                        <div key={edu.id} className="grid grid-cols-2 gap-3">
-                          <InfoRow label="SSC Board" value={edu.sscBoard} />
-                          <InfoRow label="SSC Institution" value={edu.sscInstitutionName} />
-                          <InfoRow label="SSC Hall Ticket" value={edu.sscHallTicketNo} />
-                          <InfoRow label="SSC Year" value={edu.sscYearOfPassing?.toString()} />
-                          <InfoRow label="SSC %" value={edu.sscPercentage?.toString()} />
-                          <InfoRow label="Intermediate Board" value={edu.intermediateBoard} />
-                          <InfoRow label="Intermediate Institution" value={edu.intermediateInstitutionName} />
-                          <InfoRow label="Intermediate Hall Ticket" value={edu.intermediateHallTicketNo} />
-                          <InfoRow label="Intermediate Year" value={edu.intermediateYearOfPassing?.toString()} />
-                          <InfoRow label="Intermediate %" value={edu.intermediatePercentage?.toString()} />
-                          {edu.ugBoard && (
-                            <>
-                              <InfoRow label="UG Board / University" value={edu.ugBoard} />
-                              <InfoRow label="UG Institution" value={edu.ugInstitutionName} />
-                              <InfoRow label="UG Year" value={edu.ugYearOfPassing?.toString()} />
-                              <InfoRow label="UG %" value={edu.ugPercentage?.toString()} />
-                            </>
-                          )}
-                          {edu.pgBoard && (
-                            <>
-                              <InfoRow label="PG Board / University" value={edu.pgBoard} />
-                              <InfoRow label="PG Year" value={edu.pgYearOfPassing?.toString()} />
-                              <InfoRow label="PG %" value={edu.pgPercentage?.toString()} />
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </Section>
-                  )}
-
-                  {/* Entrance Exam */}
-                  <Section icon={<FileText size={15} />} title="Entrance Exam">
-                    <div className="grid grid-cols-2 gap-3">
-                      <InfoRow label="Exam Name" value={detail.quallingEntranceExam} />
-                      <InfoRow label="Hall Ticket No." value={detail.entranceExamHallTicketNo} />
-                      <InfoRow label="Rank" value={detail.entranceExamRank} />
-                      <InfoRow label="Interested in Aurum Exam" value={detail.intrestedInAurumExam ? "Yes" : "No"} />
-                    </div>
-                  </Section>
-                </div>
+                <ApplicationDetailContent detail={detail} />
               ) : null}
             </div>
           </div>
@@ -791,7 +968,7 @@ export default function ReviewApplicants({
       {/* ── Edit Application Panel ─────────────────────────────────────────── */}
       {editApp && (
         <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/30 backdrop-blur-sm">
-          <div className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-2xl">
+          <div className="flex h-full w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl">
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
               <div className="flex items-center gap-3">
@@ -814,7 +991,26 @@ export default function ReviewApplicants({
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
-              <div className="flex flex-col gap-4">
+              {editDetailLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 size={24} className="animate-spin text-slate-400" />
+                </div>
+              ) : editDetailError ? (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                  {editDetailError}
+                </div>
+              ) : editDetail ? (
+                <ApplicationDetailForm
+                  detail={editDetail}
+                  onChange={updateEditDetail}
+                  documents={editDocuments}
+                  onDocumentsChange={handleDocumentChange}
+                  showDocuments={canEditDocuments}
+                />
+              ) : null}
+
+              <div className="mt-6 flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-slate-500">Application Status</label>
                   <select
@@ -865,6 +1061,220 @@ export default function ReviewApplicants({
 }
 
 // ── Section wrapper ────────────────────────────────────────────────────────────
+
+function ApplicationDetailContent({ detail }: { detail: ApplicationDetail }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <Section icon={<GraduationCap size={15} />} title="Programme">
+        <div className="grid grid-cols-2 gap-3">
+          <InfoRow label="Study Level" value={detail.degreeLevel?.levelName} />
+          <InfoRow label="Programme" value={detail.program?.programName} />
+          <InfoRow label="Admission Cycle" value={detail.admissionCycle?.admissionCycleName} />
+          <InfoRow label="Institution" value={detail.institution?.institutionName} />
+        </div>
+      </Section>
+
+      <Section icon={<User size={15} />} title="Personal Details">
+        <div className="grid grid-cols-2 gap-3">
+          <InfoRow label="First Name" value={detail.firstName} />
+          <InfoRow label="Last Name" value={detail.lastName} />
+          <InfoRow label="Date of Birth" value={detail.dateOfBirth ? new Date(detail.dateOfBirth).toLocaleDateString("en-IN") : null} />
+          <InfoRow label="Gender" value={detail.gender} />
+          <InfoRow label="Blood Group" value={detail.bloodGroup} />
+          <InfoRow label="Aadhar No." value={detail.aadharNo} />
+          <InfoRow label="Caste" value={detail.caste} />
+          <InfoRow label="Sub-Caste" value={detail.subCaste} />
+          <InfoRow label="State" value={detail.state} />
+        </div>
+      </Section>
+
+      <Section icon={<Phone size={15} />} title="Contact">
+        <div className="grid grid-cols-2 gap-3">
+          <InfoRow label="Mobile" value={detail.mobileNo} />
+          <InfoRow label="Email" value={detail.email} />
+          <InfoRow label="Present Address" value={detail.presentAddress} />
+          <InfoRow label="Permanent Address" value={detail.permanentAddress} />
+        </div>
+      </Section>
+
+      <Section icon={<Users size={15} />} title="Parent / Guardian">
+        <div className="grid grid-cols-2 gap-3">
+          <InfoRow label="Father Name" value={detail.fatherName} />
+          <InfoRow label="Father Mobile" value={detail.fatherMobileNo} />
+          <InfoRow label="Father Email" value={detail.fatherEmail} />
+          <InfoRow label="Mother Name" value={detail.motherName} />
+          <InfoRow label="Mother Mobile" value={detail.motherMobileNo} />
+          <InfoRow label="Mother Email" value={detail.motherEmail} />
+        </div>
+      </Section>
+
+      {detail.studentEducationDetails?.length > 0 && (
+        <Section icon={<BookOpen size={15} />} title="Education Details">
+          {detail.studentEducationDetails.map((edu) => (
+            <div key={edu.id} className="grid grid-cols-2 gap-3">
+              <InfoRow label="SSC Board" value={edu.sscBoard} />
+              <InfoRow label="SSC Institution" value={edu.sscInstitutionName} />
+              <InfoRow label="SSC Hall Ticket" value={edu.sscHallTicketNo} />
+              <InfoRow label="SSC Year" value={edu.sscYearOfPassing?.toString()} />
+              <InfoRow label="SSC %" value={edu.sscPercentage?.toString()} />
+              <InfoRow label="Intermediate Board" value={edu.intermediateBoard} />
+              <InfoRow label="Intermediate Institution" value={edu.intermediateInstitutionName} />
+              <InfoRow label="Intermediate Hall Ticket" value={edu.intermediateHallTicketNo} />
+              <InfoRow label="Intermediate Year" value={edu.intermediateYearOfPassing?.toString()} />
+              <InfoRow label="Intermediate %" value={edu.intermediatePercentage?.toString()} />
+              {edu.ugBoard && (
+                <>
+                  <InfoRow label="UG Board / University" value={edu.ugBoard} />
+                  <InfoRow label="UG Institution" value={edu.ugInstitutionName} />
+                  <InfoRow label="UG Year" value={edu.ugYearOfPassing?.toString()} />
+                  <InfoRow label="UG %" value={edu.ugPercentage?.toString()} />
+                </>
+              )}
+              {edu.pgBoard && (
+                <>
+                  <InfoRow label="PG Board / University" value={edu.pgBoard} />
+                  <InfoRow label="PG Year" value={edu.pgYearOfPassing?.toString()} />
+                  <InfoRow label="PG %" value={edu.pgPercentage?.toString()} />
+                </>
+              )}
+            </div>
+          ))}
+        </Section>
+      )}
+
+      <Section icon={<FileText size={15} />} title="Entrance Exam">
+        <div className="grid grid-cols-2 gap-3">
+          <InfoRow label="Exam Name" value={detail.quallingEntranceExam} />
+          <InfoRow label="Hall Ticket No." value={detail.entranceExamHallTicketNo} />
+          <InfoRow label="Rank" value={detail.entranceExamRank} />
+          <InfoRow label="Interested in Aurum Exam" value={detail.intrestedInAurumExam ? "Yes" : "No"} />
+        </div>
+      </Section>
+
+      <Section icon={<FileText size={15} />} title="Documents">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {DOCUMENT_KEYS.map((key) => (
+            <div key={key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-slate-700">{DOCUMENT_LABELS[key]}</span>
+                {detail.documents?.[key] ? (
+                  <a
+                    href={detail.documents[key] ?? undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    View
+                  </a>
+                ) : (
+                  <span className="text-xs font-semibold text-rose-500">Not uploaded</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+function ApplicationDetailForm({
+  detail,
+  onChange,
+  documents,
+  onDocumentsChange,
+  showDocuments,
+}: {
+  detail: ApplicationDetail;
+  onChange: (field: keyof ApplicationDetail, value: string | boolean | null) => void;
+  documents: UploadedDocuments;
+  onDocumentsChange: (updates: Partial<UploadedDocuments>) => void;
+  showDocuments: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <Section icon={<GraduationCap size={15} />} title="Programme">
+        <div className="grid grid-cols-2 gap-3">
+          <InfoRow label="Study Level" value={detail.degreeLevel?.levelName} />
+          <InfoRow label="Programme" value={detail.program?.programName} />
+          <InfoRow label="Admission Cycle" value={detail.admissionCycle?.admissionCycleName} />
+          <InfoRow label="Institution" value={detail.institution?.institutionName} />
+        </div>
+      </Section>
+
+      <Section icon={<User size={15} />} title="Personal Details">
+        <div className="grid grid-cols-2 gap-3">
+          <FormRow label="First Name" value={detail.firstName} onChange={(value) => onChange("firstName", value)} />
+          <FormRow label="Last Name" value={detail.lastName} onChange={(value) => onChange("lastName", value)} />
+          <FormRow label="Date of Birth" type="date" value={detail.dateOfBirth ? detail.dateOfBirth.split("T")[0] : null} onChange={(value) => onChange("dateOfBirth", value)} />
+          <FormSelectRow
+            label="Gender"
+            value={detail.gender}
+            onChange={(value) => onChange("gender", value)}
+            options={[
+              { value: "Male", label: "Male" },
+              { value: "Female", label: "Female" },
+              { value: "Other", label: "Other" },
+            ]}
+          />
+          <FormRow label="Blood Group" value={detail.bloodGroup} onChange={(value) => onChange("bloodGroup", value)} />
+          <FormRow label="Aadhar No." value={detail.aadharNo} onChange={(value) => onChange("aadharNo", value)} />
+          <FormRow label="Caste" value={detail.caste} onChange={(value) => onChange("caste", value)} />
+          <FormRow label="Sub-Caste" value={detail.subCaste} onChange={(value) => onChange("subCaste", value)} />
+          <FormRow label="State" value={detail.state} onChange={(value) => onChange("state", value)} />
+        </div>
+      </Section>
+
+      <Section icon={<Phone size={15} />} title="Contact">
+        <div className="grid grid-cols-2 gap-3">
+          <FormRow label="Mobile" type="tel" value={detail.mobileNo} onChange={(value) => onChange("mobileNo", value)} />
+          <FormRow label="Email" type="email" value={detail.email} onChange={(value) => onChange("email", value)} />
+          <FormRow label="Present Address" textarea value={detail.presentAddress} onChange={(value) => onChange("presentAddress", value)} rows={4} />
+          <FormRow label="Permanent Address" textarea value={detail.permanentAddress} onChange={(value) => onChange("permanentAddress", value)} rows={4} />
+        </div>
+      </Section>
+
+      <Section icon={<Users size={15} />} title="Parent / Guardian">
+        <div className="grid grid-cols-2 gap-3">
+          <FormRow label="Father Name" value={detail.fatherName} onChange={(value) => onChange("fatherName", value)} />
+          <FormRow label="Father Mobile" type="tel" value={detail.fatherMobileNo} onChange={(value) => onChange("fatherMobileNo", value)} />
+          <FormRow label="Father Email" type="email" value={detail.fatherEmail} onChange={(value) => onChange("fatherEmail", value)} />
+          <FormRow label="Mother Name" value={detail.motherName} onChange={(value) => onChange("motherName", value)} />
+          <FormRow label="Mother Mobile" type="tel" value={detail.motherMobileNo} onChange={(value) => onChange("motherMobileNo", value)} />
+          <FormRow label="Mother Email" type="email" value={detail.motherEmail} onChange={(value) => onChange("motherEmail", value)} />
+        </div>
+      </Section>
+
+      <Section icon={<FileText size={15} />} title="Entrance Exam">
+        <div className="grid grid-cols-2 gap-3">
+          <FormRow label="Exam Name" value={detail.quallingEntranceExam} onChange={(value) => onChange("quallingEntranceExam", value)} />
+          <FormRow label="Hall Ticket No." value={detail.entranceExamHallTicketNo} onChange={(value) => onChange("entranceExamHallTicketNo", value)} />
+          <FormRow label="Rank" value={detail.entranceExamRank} onChange={(value) => onChange("entranceExamRank", value)} />
+          <FormSelectRow
+            label="Interested in Aurum Exam"
+            value={detail.intrestedInAurumExam ? "yes" : "no"}
+            onChange={(value) => onChange("intrestedInAurumExam", value === "yes")}
+            options={[
+              { value: "yes", label: "Yes" },
+              { value: "no", label: "No" },
+            ]}
+          />
+        </div>
+      </Section>
+
+      {showDocuments && (
+        <Section icon={<FileText size={15} />} title="Documents">
+          <UploadDocumentsStep
+            data={documents}
+            errors={{}}
+            onChange={onDocumentsChange}
+            degreeLevel={detail.degreeLevel?.levelName}
+          />
+        </Section>
+      )}
+    </div>
+  );
+}
 
 function Section({
   icon,

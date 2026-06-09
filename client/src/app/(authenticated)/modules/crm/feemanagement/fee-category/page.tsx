@@ -12,6 +12,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRole } from "@/lib/hooks/useRole";
 import { useProfile } from "@/providers/ProfileProvider";
+import { authFetch } from "@/lib/utils/authFetch";
 
 type Mode = "create" | "edit";
 
@@ -180,9 +181,7 @@ export default function FeeCategoryPage() {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/institutions`, {
-          credentials: "include",
-        });
+        const response = await authFetch(`${API_BASE_URL}/api/institutions`);
         if (!response.ok) return;
         const data = (await response.json()) as {
           institutions: Institution[];
@@ -212,9 +211,7 @@ export default function FeeCategoryPage() {
           return;
         }
 
-        const response = await fetch(endpoint, {
-          credentials: "include",
-        });
+        const response = await authFetch(endpoint);
 
         const data = (await response.json().catch(() => null)) as
           | { error?: string; feeCategories?: RawFeeCategory[] }
@@ -365,10 +362,9 @@ export default function FeeCategoryPage() {
           isFixed: formData.isFixed,
         };
 
-        const response = await fetch(`${API_BASE_URL}/api/feecategory/create`, {
+        const response = await authFetch(`${API_BASE_URL}/api/feecategory/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify(payload),
         });
 
@@ -432,10 +428,9 @@ export default function FeeCategoryPage() {
         isActive: formData.isActive,
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/feecategory/update`, {
+      const response = await authFetch(`${API_BASE_URL}/api/feecategory/update`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(payload),
       });
 
@@ -475,9 +470,8 @@ export default function FeeCategoryPage() {
   const handleDelete = async (feeCategoryId: string) => {
     setError("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/feecategory/delete/${feeCategoryId}`, {
+      const response = await authFetch(`${API_BASE_URL}/api/feecategory/delete/${feeCategoryId}`, {
         method: "DELETE",
-        credentials: "include",
       });
 
       const data = (await response.json().catch(() => null)) as

@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Loader2,
   Check,
+  UserPlus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useProfile } from "@/providers/ProfileProvider";
@@ -42,6 +43,7 @@ type Lead = {
   programApplied: string;
   admissionCycle: string;
   hasApplication: boolean;
+  leadSourceType?: string | null;
   // Only present for director / incharge responses
   admissionCounsellor?: string | null;
   admissionConsultant?: string | null;
@@ -261,6 +263,21 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
   const [editProgramLoading, setEditProgramLoading] = useState(false);
   const [editCycleLoading, setEditCycleLoading] = useState(false);
 
+  // Add Lead modal
+  const [addLeadOpen, setAddLeadOpen] = useState(false);
+  const [addLeadForm, setAddLeadForm] = useState({
+    firstName: "", lastName: "", mobileNo: "", email: "", state: "",
+    levelId: "", programId: "", admissionCycleId: "",
+  });
+  const [addLeadSaving, setAddLeadSaving] = useState(false);
+  const [addLeadError, setAddLeadError] = useState("");
+  const [addLeadDegreeLevels, setAddLeadDegreeLevels] = useState<DropdownOpt[]>([]);
+  const [addLeadPrograms, setAddLeadPrograms] = useState<DropdownOpt[]>([]);
+  const [addLeadAdmissionCycles, setAddLeadAdmissionCycles] = useState<DropdownOpt[]>([]);
+  const [addLeadDegreeLoading, setAddLeadDegreeLoading] = useState(false);
+  const [addLeadProgramLoading, setAddLeadProgramLoading] = useState(false);
+  const [addLeadCycleLoading, setAddLeadCycleLoading] = useState(false);
+
   const [expandedCallLogLeadId, setExpandedCallLogLeadId] = useState<string | null>(null);
   const [callLogsLead, setCallLogsLead] = useState<Lead | null>(null);
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
@@ -285,6 +302,67 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
   const isConsultant = role === "admissionConsultant";
   const canCreateLogs = isCounsellor || isConsultant;
   const canManageLeads = isDirectorOrIncharge;
+  const canAddLead = isCounsellor || isConsultant || isDirectorOrIncharge;
+
+  // ── Add Lead: cascading dropdowns ────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!addLeadOpen || !profile?.institution?.id) return;
+    let cancelled = false;
+    setAddLeadDegreeLoading(true);
+    fetch(`${API_BASE}/api/degree-levels/by-institution/${profile.institution.id}`, { credentials: "include" })
+      .then((r) => r.json() as Promise<{ degreeLevels?: { id: string; levelName: string }[] }>)
+      .then((data) => {
+        if (cancelled) return;
+        setAddLeadDegreeLevels((data.degreeLevels ?? []).map((l) => ({ id: l.id, label: l.levelName })));
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setAddLeadDegreeLoading(false); });
+    return () => { cancelled = true; };
+  }, [addLeadOpen, profile?.institution?.id]);
+
+  useEffect(() => {
+    if (!addLeadOpen || !profile?.institution?.id || !addLeadForm.levelId) { setAddLeadPrograms([]); return; }
+    let cancelled = false;
+    setAddLeadProgramLoading(true);
+    fetch(`${API_BASE}/api/programme/${profile.institution.id}/${addLeadForm.levelId}`, { credentials: "include" })
+      .then((r) => r.json() as Promise<{ id: string; programName: string; programSname: string }[]>)
+      .then((data) => {
+        if (cancelled) return;
+        const arr = Array.isArray(data) ? data : [];
+        setAddLeadPrograms(arr.map((p) => ({ id: p.id, label: `${p.programSname} - ${p.programName}` })));
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setAddLeadProgramLoading(false); });
+    return () => { cancelled = true; };
+  }, [addLeadOpen, profile?.institution?.id, addLeadForm.levelId]);
+
+  useEffect(() => {
+    if (!addLeadOpen || !profile?.institution?.id || !addLeadForm.levelId || !addLeadForm.programId) {
+      setAddLeadAdmissionCycles([]); return;
+    }
+    let cancelled = false;
+    setAddLeadCycleLoading(true);
+    fetch(
+      `${API_BASE}/api/admission-cycles/latest-active?institutionId=${profile.institution.id}&levelId=${addLeadForm.levelId}&programId=${addLeadForm.programId}`,
+      { credentials: "include" }
+    )
+      .then((r) => r.json() as Promise<{ id?: string; admissionCycleName?: string; error?: string }>)
+      .then((data) => {
+        if (cancelled) return;
+        if (data.id && data.admissionCycleName) {
+          setAddLeadAdmissionCycles([{ id: data.id, label: data.admissionCycleName }]);
+          setAddLeadForm((prev) => ({ ...prev, admissionCycleId: data.id! }));
+        } else {
+          setAddLeadAdmissionCycles([]);
+          setAddLeadForm((prev) => ({ ...prev, admissionCycleId: "" }));
+        }
+      })
+      .catch(() => { if (!cancelled) { setAddLeadAdmissionCycles([]); setAddLeadForm((prev) => ({ ...prev, admissionCycleId: "" })); } })
+      .finally(() => { if (!cancelled) setAddLeadCycleLoading(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addLeadOpen, profile?.institution?.id, addLeadForm.levelId, addLeadForm.programId]);
 
   // ── Fetch leads ─────────────────────────────────────────────────────────────
 
@@ -451,7 +529,7 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
 
   // ── Column count for skeleton ────────────────────────────────────────────────
 
-  const colCount = isDirectorOrIncharge ? 10 : 9;
+  const colCount = isDirectorOrIncharge ? 11 : 10;
 
   // ── Empty / error states ─────────────────────────────────────────────────────
 
@@ -542,6 +620,57 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
 
   // ── Save edits ────────────────────────────────────────────────────────────────
 
+  // ── Add Lead ──────────────────────────────────────────────────────────────────
+
+  async function handleAddLead() {
+    const f = addLeadForm;
+    if (!f.firstName.trim() || !f.lastName.trim() || !f.mobileNo.trim() || !f.email.trim() || !f.state.trim()) {
+      setAddLeadError("All personal details are required.");
+      return;
+    }
+    if (!f.levelId || !f.programId || !f.admissionCycleId) {
+      setAddLeadError("Study level, programme, and admission cycle are required.");
+      return;
+    }
+    const institutionId = profile?.institution?.id;
+    if (!institutionId) { setAddLeadError("Institution not found in your profile."); return; }
+
+    setAddLeadSaving(true);
+    setAddLeadError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/leads/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          institutionId,
+          levelId: f.levelId,
+          programId: f.programId,
+          admissionCycleId: f.admissionCycleId,
+          firstName: f.firstName.trim(),
+          lastName: f.lastName.trim(),
+          mobileNo: f.mobileNo.trim(),
+          email: f.email.trim(),
+          state: f.state.trim(),
+          entityId: profile?.entityId ?? "",
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+        lead?: Lead;
+      } | null;
+      if (!res.ok) { setAddLeadError(data?.error ?? "Failed to add lead. Please try again."); return; }
+      // Prepend new lead to the list
+      if (data?.lead) setLeads((prev) => [data.lead!, ...prev]);
+      setAddLeadOpen(false);
+      setAddLeadForm({ firstName: "", lastName: "", mobileNo: "", email: "", state: "", levelId: "", programId: "", admissionCycleId: "" });
+    } catch {
+      setAddLeadError("Network error. Please try again.");
+    } finally {
+      setAddLeadSaving(false);
+    }
+  }
+
   async function saveLeadEdit() {
     if (!leadDetail) return;
     if (!editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.mobileNo.trim() || !editForm.email.trim()) {
@@ -586,6 +715,7 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
         prev ? { ...prev, firstName: editForm.firstName.trim(), lastName: editForm.lastName.trim(), mobileNo: editForm.mobileNo.trim(), email: editForm.email.trim() } : prev
       );
       setIsEditing(false);
+      setViewLead(null);
     } catch {
       setEditError("Network error. Please try again.");
     } finally {
@@ -853,9 +983,21 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
             className="w-full rounded-xl border border-slate-300 bg-slate-50 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
           />
         </div>
-        <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-          {loading ? "Loading…" : `${filtered.length} lead${filtered.length !== 1 ? "s" : ""}`}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+            {loading ? "Loading…" : `${filtered.length} lead${filtered.length !== 1 ? "s" : ""}`}
+          </span>
+          {canAddLead && (
+            <button
+              type="button"
+              onClick={() => { setAddLeadOpen(true); setAddLeadError(""); setAddLeadForm({ firstName: "", lastName: "", mobileNo: "", email: "", state: "", levelId: "", programId: "", admissionCycleId: "" }); }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-700"
+            >
+              <UserPlus size={13} />
+              Add Lead
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -871,6 +1013,7 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
               <th className="px-4 py-3">Study Level</th>
               <th className="px-4 py-3">Applied Program</th>
               <th className="px-4 py-3">Admission Cycle</th>
+              <th className="px-4 py-3">Lead Type</th>
               {isDirectorOrIncharge && (
                 <th className="px-4 py-3">Assigned To</th>
               )}
@@ -934,6 +1077,19 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
                         <td className="px-4 py-3 text-slate-600">
                           {lead.admissionCycle}
                         </td>
+                        <td className="px-4 py-3">
+                          {lead.leadSourceType === "OWN_GENERATED" ? (
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+                              Own Generated
+                            </span>
+                          ) : lead.leadSourceType === "SYSTEM_ASSIGNED" ? (
+                            <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 border border-blue-200">
+                              System Assigned
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
                         {isDirectorOrIncharge && (
                           <td className="px-4 py-3 text-slate-600">
                             {assignedTo}
@@ -950,16 +1106,14 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
                               <Eye size={15} />
                             </button>
 
-                            {!isConverted && (
-                              <button
-                                type="button"
-                                title="Edit lead"
-                                onClick={() => openEditLead(lead)}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              title="Edit lead"
+                              onClick={() => openEditLead(lead)}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
+                            >
+                              <Pencil size={14} />
+                            </button>
 
                             <div className="relative">
                               <button
@@ -1327,6 +1481,177 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
         </div>
       )}
 
+      {/* ── Add Lead Modal ────────────────────────────────────────────── */}
+      {addLeadOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                  <UserPlus size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Add New Lead</h3>
+                  <p className="text-xs text-slate-400">
+                    {isCounsellor || isConsultant ? "Marked as Own Generated" : "System Assigned (auto-assigned counsellor)"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddLeadOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {addLeadError && (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                  {addLeadError}
+                </div>
+              )}
+
+              {/* Personal Details */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Personal Details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">First Name <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      value={addLeadForm.firstName}
+                      onChange={(e) => setAddLeadForm({ ...addLeadForm, firstName: e.target.value })}
+                      placeholder="First name"
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">Last Name <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      value={addLeadForm.lastName}
+                      onChange={(e) => setAddLeadForm({ ...addLeadForm, lastName: e.target.value })}
+                      placeholder="Last name"
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">Mobile No. <span className="text-rose-500">*</span></label>
+                    <input
+                      type="tel"
+                      value={addLeadForm.mobileNo}
+                      onChange={(e) => setAddLeadForm({ ...addLeadForm, mobileNo: e.target.value })}
+                      placeholder="10-digit mobile"
+                      maxLength={10}
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">Email <span className="text-rose-500">*</span></label>
+                    <input
+                      type="email"
+                      value={addLeadForm.email}
+                      onChange={(e) => setAddLeadForm({ ...addLeadForm, email: e.target.value })}
+                      placeholder="Email address"
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600">State <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      value={addLeadForm.state}
+                      onChange={(e) => setAddLeadForm({ ...addLeadForm, state: e.target.value })}
+                      placeholder="State of residence"
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Programme Selection */}
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Programme</p>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">Study Level <span className="text-rose-500">*</span></label>
+                  <select
+                    value={addLeadForm.levelId}
+                    onChange={(e) => setAddLeadForm({ ...addLeadForm, levelId: e.target.value, programId: "", admissionCycleId: "" })}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    disabled={addLeadDegreeLoading}
+                  >
+                    <option value="">
+                      {addLeadDegreeLoading ? "Loading…" : "— Select level —"}
+                    </option>
+                    {addLeadDegreeLevels.map((l) => (
+                      <option key={l.id} value={l.id}>{l.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">Programme <span className="text-rose-500">*</span></label>
+                  <select
+                    value={addLeadForm.programId}
+                    onChange={(e) => setAddLeadForm({ ...addLeadForm, programId: e.target.value, admissionCycleId: "" })}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    disabled={!addLeadForm.levelId || addLeadProgramLoading}
+                  >
+                    <option value="">
+                      {addLeadProgramLoading ? "Loading…" : "— Select programme —"}
+                    </option>
+                    {addLeadPrograms.map((p) => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">Admission Cycle <span className="text-rose-500">*</span></label>
+                  <select
+                    value={addLeadForm.admissionCycleId}
+                    onChange={(e) => setAddLeadForm({ ...addLeadForm, admissionCycleId: e.target.value })}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    disabled={!addLeadForm.programId || addLeadCycleLoading}
+                  >
+                    <option value="">
+                      {addLeadCycleLoading ? "Loading…" : "— Select cycle —"}
+                    </option>
+                    {addLeadAdmissionCycles.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => setAddLeadOpen(false)}
+                disabled={addLeadSaving}
+                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { void handleAddLead(); }}
+                disabled={addLeadSaving}
+                className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+              >
+                {addLeadSaving && <Loader2 size={13} className="animate-spin" />}
+                {addLeadSaving ? "Adding…" : "Add Lead"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Forward Lead Modal ────────────────────────────────────────────── */}
       {forwardLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -1491,6 +1816,17 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
                     <span className="text-xs text-slate-400">Lead #{viewLead.id.slice(-6).toUpperCase()}</span>
                   </div>
                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  title="Open in Admission Review"
+                  onClick={() => { void router.push(`/modules/crm/admissions/review?search=${encodeURIComponent(viewLead.email)}`); }}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <ArrowRightCircle size={14} />
+                  Open Application
+                </button>
               </div>
               <button
                 type="button"
@@ -1763,7 +2099,7 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => { setIsEditing(false); setEditError(""); }}
+                    onClick={() => { setViewLead(null); setIsEditing(false); setEditError(""); }}
                     className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                   >
                     Cancel
@@ -1778,16 +2114,7 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
                     {editSaving ? "Saving…" : "Save Changes"}
                   </button>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => { setIsEditing(true); setEditError(""); }}
-                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                >
-                  <Pencil size={14} />
-                  Edit Lead
-                </button>
-              )}
+              ) : null}
             </div>
 
           </div>

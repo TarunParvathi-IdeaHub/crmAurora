@@ -1,10 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:5000';
+
+const PASSWORD_HAS_UPPERCASE = /[A-Z]/;
+const PASSWORD_HAS_NUMBER = /\d/;
+const PASSWORD_HAS_SPECIAL = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/;
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -18,6 +22,17 @@ export default function ChangePasswordPage() {
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const hasUppercase = useMemo(() => PASSWORD_HAS_UPPERCASE.test(newPassword), [newPassword]);
+  const hasNumber = useMemo(() => PASSWORD_HAS_NUMBER.test(newPassword), [newPassword]);
+  const hasSpecial = useMemo(() => PASSWORD_HAS_SPECIAL.test(newPassword), [newPassword]);
+  const hasMinLength = useMemo(() => newPassword.trim().length >= 8, [newPassword]);
+  const newPasswordValid = hasMinLength && hasUppercase && hasNumber && hasSpecial;
+  const confirmPasswordValid = confirmPassword.length > 0 && confirmPassword === newPassword;
+  const isFormValid =
+    currentPassword.trim().length > 0 &&
+    newPasswordValid &&
+    confirmPasswordValid;
+
   const handleChangePassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
@@ -28,19 +43,21 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    if (newPassword.trim() !== confirmPassword.trim()) {
-      setError('New password and confirm password must match.');
+    if (!newPasswordValid) {
+      setError('New password must be at least 8 characters long and include uppercase, number, and special character.');
       return;
     }
 
-    if (currentPassword.trim() === newPassword.trim()) {
-      setError('New password must be different from the current password.');
+    if (newPassword.trim() !== confirmPassword.trim()) {
+      setError('New password and confirm password must match.');
       return;
     }
 
     setIsLoading(true);
 
     try {
+      const storedUser = JSON.parse(localStorage.getItem('erpUser') || '{}');
+
       const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
         method: 'POST',
         headers: {
@@ -48,8 +65,9 @@ export default function ChangePasswordPage() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          currentPassword: currentPassword.trim(),
+          oldPassword: currentPassword.trim(),
           newPassword: newPassword.trim(),
+          userId: storedUser.userId,
         }),
       });
 
@@ -64,7 +82,16 @@ export default function ChangePasswordPage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      router.push('/login');
+
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      }).catch(() => null);
+
+      localStorage.clear();
+      sessionStorage.clear();
+
+      router.replace('/login');
     } catch {
       setError('Unable to connect to the backend. Please ensure the server is running.');
     } finally {
@@ -237,6 +264,25 @@ export default function ChangePasswordPage() {
                     )}
                   </button>
                 </div>
+                {newPassword.length > 0 && (
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                    <p className="font-medium text-slate-800 mb-2">Password must include:</p>
+                    <ul className="space-y-1 text-sm">
+                      <li className={hasMinLength ? 'text-emerald-700' : 'text-rose-600'}>
+                        {hasMinLength ? '✓' : '•'} At least 8 characters
+                      </li>
+                      <li className={hasUppercase ? 'text-emerald-700' : 'text-rose-600'}>
+                        {hasUppercase ? '✓' : '•'} At least one uppercase letter
+                      </li>
+                      <li className={hasNumber ? 'text-emerald-700' : 'text-rose-600'}>
+                        {hasNumber ? '✓' : '•'} At least one number
+                      </li>
+                      <li className={hasSpecial ? 'text-emerald-700' : 'text-rose-600'}>
+                        {hasSpecial ? '✓' : '•'} At least one special character
+                      </li>
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -304,11 +350,18 @@ export default function ChangePasswordPage() {
                     )}
                   </button>
                 </div>
+                {confirmPassword.length > 0 && (
+                  <p className={`mt-2 text-sm ${confirmPasswordValid ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {confirmPasswordValid
+                      ? 'Passwords match.'
+                      : 'Confirm password must exactly match the new password.'}
+                  </p>
+                )}
               </div>
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !isFormValid}
                 className="w-full h-12 rounded-lg bg-[#5584f1] text-white text-[16px] font-semibold transition hover:bg-[#436cd9] disabled:cursor-not-allowed disabled:bg-slate-400"
               >
                 {isLoading ? 'Updating...' : 'Change Password'}

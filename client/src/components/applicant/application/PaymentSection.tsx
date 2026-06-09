@@ -63,7 +63,7 @@ export default function PaymentSection({
               <p className="font-semibold text-rose-800">Payment Failed</p>
               <p className="mt-1 text-sm text-rose-700">
                 Your payment could not be processed. If the amount was deducted
-                from your account, it will be refunded within 5–7 business days.
+                from your account, it will be refunded within few working business days.
               </p>
               <p className="mt-3 text-sm text-rose-700 font-medium flex items-center gap-1.5">
                 <PhoneCall size={14} className="shrink-0" />

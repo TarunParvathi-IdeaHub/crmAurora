@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { useRole } from "@/lib/hooks/useRole";
+import { authFetch } from "@/lib/utils/authFetch";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
@@ -71,7 +72,7 @@ export default function CreateEmployeePage() {
   // ── Fetch institutions ──────────────────────────────────────────────────────
   useEffect(() => {
     if (role === "collegeAdmin") {
-      fetch(`${API_BASE_URL}/api/institutions/current`, { credentials: "include" })
+      authFetch(`${API_BASE_URL}/api/institutions/current`)
         .then((r) => r.json())
         .then((d: { institution?: Institution }) => {
           if (d.institution) {
@@ -81,7 +82,7 @@ export default function CreateEmployeePage() {
         })
         .catch(() => {});
     } else {
-      fetch(`${API_BASE_URL}/api/institutions`, { credentials: "include" })
+      authFetch(`${API_BASE_URL}/api/institutions`)
         .then((r) => r.json())
         .then((d) => setInstitutions(d.institutions ?? []))
         .catch(() => {});
@@ -94,10 +95,7 @@ export default function CreateEmployeePage() {
     setForm((prev) => ({ ...prev, roleId: "", designation: "" }));
     setRoleSelected(false);
     if (!form.institutionId) return;
-    fetch(
-      `${API_BASE_URL}/api/employee-roles/getall?institutionId=${encodeURIComponent(form.institutionId)}`,
-      { credentials: "include" }
-    )
+    authFetch(`${API_BASE_URL}/api/employee-roles/getall?institutionId=${encodeURIComponent(form.institutionId)}`)
       .then((r) => r.json())
       .then((d) => setRoles(d.employeeRoles ?? []))
       .catch(() => {});
@@ -108,10 +106,7 @@ export default function CreateEmployeePage() {
     setDepartments([]);
     setForm((prev) => ({ ...prev, departmentId: "" }));
     if (!form.institutionId) return;
-    fetch(
-      `${API_BASE_URL}/api/departments?institutionId=${encodeURIComponent(form.institutionId)}`,
-      { credentials: "include" }
-    )
+    authFetch(`${API_BASE_URL}/api/departments?institutionId=${encodeURIComponent(form.institutionId)}`)
       .then((r) => r.json())
       .then((d) => setDepartments(d.departments ?? []))
       .catch(() => {});
@@ -189,9 +184,8 @@ export default function CreateEmployeePage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const resp = await fetch(`${API_BASE_URL}/api/employees/bulk-create`, {
+      const resp = await authFetch(`${API_BASE_URL}/api/employees/bulk-create`, {
         method: "POST",
-        credentials: "include",
         body: formData,
       });
 
@@ -270,9 +264,8 @@ export default function CreateEmployeePage() {
       };
       if (form.departmentId) body.departmentId = form.departmentId;
 
-      const resp = await fetch(`${API_BASE_URL}/api/employees`, {
+      const resp = await authFetch(`${API_BASE_URL}/api/employees`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });

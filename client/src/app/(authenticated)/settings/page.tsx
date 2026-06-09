@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, Lock, Moon, Palette, Shield, User } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Card from "@/components/common/Card";
 import Badge from "@/components/common/Badge";
 
@@ -43,14 +44,38 @@ const sections = [
 ];
 
 export default function SettingsPage() {
+  const router = useRouter();
+
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/dashboard");
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Settings</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Manage your account preferences and system configuration.
-        </p>
+      <div className="flex items-start gap-4">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="mt-1 inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
+          aria-label="Go back"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Settings</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Manage your account preferences and system configuration.
+          </p>
+        </div>
       </div>
 
       {/* Settings sections */}

@@ -21,6 +21,15 @@ import EducationDetailsStep from "@/components/applicant/application/steps/Educa
 import EntranceDetailsStep from "@/components/applicant/application/steps/EntranceDetailsStep";
 import UploadDocumentsStep from "@/components/applicant/application/steps/UploadDocumentsStep";
 import PreviewStep from "@/components/applicant/application/steps/PreviewStep";
+import {
+  getDobValidationMessage,
+  getIndianCurrentYear,
+  getIntermediateYears,
+  getPGYears,
+  getSSCYears,
+  getUGYears,
+  syncIndianClockWithServer,
+} from "@/lib/utils/admissionDateRules";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
 
@@ -41,8 +50,10 @@ const EMPTY_BASIC: BasicDetails = {
   mobileNo: "", email: "",
   aadharNo: "", bloodGroup: "", caste: "", subCaste: "",
   state: "", city: "", pincode: "", presentAddress: "", permanentAddress: "",
+  isLocal: true,
   fatherName: "", fatherMobileNo: "", fatherEmail: "",
   motherName: "", motherMobileNo: "", motherEmail: "",
+  guardianName: "", guardianMobileNo: "", guardianEmail: "",
 };
 
 const EMPTY_EDUCATION: EducationDetails = {
@@ -61,7 +72,7 @@ const EMPTY_ENTRANCE: EntranceExamDetails = {
 };
 
 const EMPTY_DOCUMENTS: UploadedDocuments = {
-  aadharCard: null, sscMemo: null, intermediateMemo: null,
+  aadharCard: null, passportPhoto: null, studentSignature: null, sscMemo: null, intermediateMemo: null,
   ugMemo: null, pgMemo: null, gapCertificate: null, bonafideCertificate: null, transferCertificate: null,
 };
 
@@ -110,53 +121,71 @@ function isStepComplete(step: number, state: ApplicationFormState, dl = ""): boo
     const b = state.basicDetails;
     const hasRequired = !!(
       b.firstName && b.lastName && b.dateOfBirth && b.gender &&
-      MOBILE_RE.test(b.mobileNo) && b.email.includes("@")
+      MOBILE_RE.test(b.mobileNo) && b.email.includes("@") &&
+      b.aadharNo && b.bloodGroup && b.caste && b.subCaste &&
+      b.state && b.city && b.pincode && b.presentAddress && b.permanentAddress &&
+      b.fatherName && b.fatherMobileNo && b.fatherEmail &&
+      b.motherName && b.motherMobileNo && b.motherEmail
     );
+    if (!state.documents.aadharCard) return false;
     if (!hasRequired) return false;
+    if (getDobValidationMessage(dl, b.dateOfBirth)) return false;
     if (!NAME_RE.test(b.firstName.trim())) return false;
     if (!NAME_RE.test(b.lastName.trim())) return false;
-    if (b.aadharNo && !AADHAR_RE.test(b.aadharNo.trim())) return false;
-    if (b.caste && !CASTE_RE.test(b.caste.trim())) return false;
-    if (b.subCaste && !CASTE_RE.test(b.subCaste.trim())) return false;
-    if (b.city && !CITY_RE.test(b.city.trim())) return false;
-    if (b.pincode && !PINCODE_RE.test(b.pincode.trim())) return false;
-    if (b.fatherName && !NAME_RE.test(b.fatherName.trim())) return false;
-    if (b.motherName && !NAME_RE.test(b.motherName.trim())) return false;
-    if (b.fatherMobileNo && !MOBILE_RE.test(b.fatherMobileNo.trim())) return false;
-    if (b.motherMobileNo && !MOBILE_RE.test(b.motherMobileNo.trim())) return false;
+    if (!AADHAR_RE.test(b.aadharNo.trim())) return false;
+    if (!CASTE_RE.test(b.caste.trim())) return false;
+    if (!CASTE_RE.test(b.subCaste.trim())) return false;
+    if (!CITY_RE.test(b.city.trim())) return false;
+    if (!PINCODE_RE.test(b.pincode.trim())) return false;
+    if (!NAME_RE.test(b.fatherName.trim())) return false;
+    if (!NAME_RE.test(b.motherName.trim())) return false;
+    if (!MOBILE_RE.test(b.fatherMobileNo.trim())) return false;
+    if (!MOBILE_RE.test(b.motherMobileNo.trim())) return false;
+    if (!b.isLocal) {
+      if (!b.guardianName || !NAME_RE.test(b.guardianName.trim())) return false;
+      if (!b.guardianMobileNo || !MOBILE_RE.test(b.guardianMobileNo.trim())) return false;
+      if (!b.guardianEmail || !b.guardianEmail.includes("@")) return false;
+    }
     return true;
   }
   if (step === 1) {
     const e = state.educationDetails;
+    const currentYear = getIndianCurrentYear();
+    const allowedSSCYears = getSSCYears(dl, currentYear);
+    const allowedIntermediateYears = getIntermediateYears(dl, e.sscYearOfPassing, currentYear);
+    const allowedUGYears = getUGYears(dl, e.intermediateYearOfPassing, currentYear);
+    const allowedPGYears = getPGYears(dl, e.ugYearOfPassing, currentYear);
+
     const base = !!(
       e.sscBoard && e.sscInstitutionName && e.sscHallTicketNo && e.sscYearOfPassing && e.sscPercentage &&
       e.intermediateBoard && e.intermediateInstitutionName && e.intermediateHallTicketNo &&
       e.intermediateYearOfPassing && e.intermediatePercentage
     );
+    if (!state.documents.sscMemo || !state.documents.intermediateMemo) return false;
     if (!base) return false;
+    if (!allowedSSCYears.includes(e.sscYearOfPassing)) return false;
+    if (!allowedIntermediateYears.includes(e.intermediateYearOfPassing)) return false;
     // UG fields required only for PG and PhD applicants
     const ugRequired = dlIsPG(dl) || dlIsPhd(dl);
     if (ugRequired) {
       if (!e.ugBoard || !e.ugInstitutionName || !e.ugHallTicketNo || !e.ugYearOfPassing || !e.ugPercentage) return false;
+      if (!allowedUGYears.includes(e.ugYearOfPassing)) return false;
     }
     const showPG = dlIsPhd(dl) || e.hasPGDegree;
     if (showPG) {
       if (!e.pgBoard || !e.pgInstitutionName || !e.pgHallTicketNo || !e.pgYearOfPassing || !e.pgPercentage) return false;
+      if (!allowedPGYears.includes(e.pgYearOfPassing)) return false;
     }
     return true;
   }
   if (step === 2) {
-    // Entrance Exam is optional but only shows as complete when data exists
     const x = state.entranceExamDetails;
-    const hasData = !!(
-      x.quallingEntranceExam?.trim() ||
-      x.entranceExamHallTicketNo?.trim() ||
-      x.entranceExamRank?.trim()
-    );
-    if (!hasData) return false;
-    if (x.quallingEntranceExam?.trim() && !ENTRANCE_EXAM_RE.test(x.quallingEntranceExam.trim())) return false;
-    if (x.entranceExamHallTicketNo?.trim() && !ENTRANCE_NUM_RE.test(x.entranceExamHallTicketNo.trim())) return false;
-    if (x.entranceExamRank?.trim() && !ENTRANCE_NUM_RE.test(x.entranceExamRank.trim())) return false;
+    if (!x.quallingEntranceExam?.trim()) return false;
+    if (!x.entranceExamHallTicketNo?.trim()) return false;
+    if (!x.entranceExamRank?.trim()) return false;
+    if (!ENTRANCE_EXAM_RE.test(x.quallingEntranceExam.trim())) return false;
+    if (!ENTRANCE_NUM_RE.test(x.entranceExamHallTicketNo.trim())) return false;
+    if (!ENTRANCE_NUM_RE.test(x.entranceExamRank.trim())) return false;
     return true;
   }
   if (step === 3) {
@@ -187,48 +216,133 @@ function validateStep(
     if (!b.lastName.trim()) errors.lastName = "Last name is required.";
     if (!b.dateOfBirth) errors.dateOfBirth = "Date of birth is required.";
     if (!b.gender) errors.gender = "Please select a gender.";
-    if (!MOBILE_RE.test(b.mobileNo.trim())) {
+    if (!b.mobileNo.trim()) {
+      errors.mobileNo = "Mobile number is required.";
+    } else if (!MOBILE_RE.test(b.mobileNo.trim())) {
       errors.mobileNo = "Enter a valid 10-digit mobile number.";
     }
-    if (!b.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
+    if (!b.email.trim()) {
+      errors.email = "Email address is required.";
+    } else if (!b.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
       errors.email = "Enter a valid email address.";
+    }
+    const dobValidationMessage = getDobValidationMessage(dl, b.dateOfBirth);
+    if (dobValidationMessage) {
+      errors.dateOfBirth = dobValidationMessage;
+    }
     if (b.firstName.trim() && !NAME_RE.test(b.firstName.trim())) {
       errors.firstName = "First name should contain only letters and spaces.";
     }
     if (b.lastName.trim() && !NAME_RE.test(b.lastName.trim())) {
       errors.lastName = "Last name should contain only letters and spaces.";
     }
-    if (b.aadharNo.trim() && !AADHAR_RE.test(b.aadharNo.trim())) {
+    if (!b.aadharNo.trim()) {
+      errors.aadharNo = "Aadhaar number is required.";
+    } else if (!AADHAR_RE.test(b.aadharNo.trim())) {
       errors.aadharNo = "Aadhaar number must be 12 digits.";
     }
-    if (b.caste.trim() && !CASTE_RE.test(b.caste.trim())) {
-      errors.caste = "Caste should contain only letters and hyphen.";
+    if (!state.documents.aadharCard) {
+      errors.aadharCard = "Aadhaar card is required.";
     }
-    if (b.subCaste.trim() && !CASTE_RE.test(b.subCaste.trim())) {
-      errors.subCaste = "Sub-caste should contain only letters and hyphen.";
+    if (!b.bloodGroup) {
+      errors.bloodGroup = "Blood group is required.";
     }
-    if (b.city.trim() && !CITY_RE.test(b.city.trim())) {
+    if (!b.caste.trim()) {
+      errors.caste = "Caste is required.";
+    } else if (!CASTE_RE.test(b.caste.trim())) {
+      errors.caste = "Caste should contain only letters, spaces, and hyphens.";
+    }
+    if (!b.subCaste.trim()) {
+      errors.subCaste = "Sub-caste is required.";
+    } else if (!CASTE_RE.test(b.subCaste.trim())) {
+      errors.subCaste = "Sub-caste should contain only letters, spaces, and hyphens.";
+    }
+    if (!b.state) {
+      errors.state = "State is required.";
+    }
+    if (!b.city.trim()) {
+      errors.city = "City is required.";
+    } else if (!CITY_RE.test(b.city.trim())) {
       errors.city = "City should contain only letters and spaces.";
     }
-    if (b.pincode.trim() && !PINCODE_RE.test(b.pincode.trim())) {
+    if (!b.pincode.trim()) {
+      errors.pincode = "Pincode is required.";
+    } else if (!PINCODE_RE.test(b.pincode.trim())) {
       errors.pincode = "Pincode must be 6 digits.";
     }
-    if (b.fatherName.trim() && !NAME_RE.test(b.fatherName.trim())) {
+    if (!b.presentAddress.trim()) {
+      errors.presentAddress = "Present address is required.";
+    }
+    if (!b.permanentAddress.trim()) {
+      errors.permanentAddress = "Permanent address is required.";
+    }
+    if (!b.fatherName.trim()) {
+      errors.fatherName = "Father name is required.";
+    } else if (!NAME_RE.test(b.fatherName.trim())) {
       errors.fatherName = "Father name should contain only letters and spaces.";
     }
-    if (b.motherName.trim() && !NAME_RE.test(b.motherName.trim())) {
-      errors.motherName = "Mother name should contain only letters and spaces.";
-    }
-    if (b.fatherMobileNo.trim() && !MOBILE_RE.test(b.fatherMobileNo.trim())) {
+    if (!b.fatherMobileNo.trim()) {
+      errors.fatherMobileNo = "Father mobile number is required.";
+    } else if (!MOBILE_RE.test(b.fatherMobileNo.trim())) {
       errors.fatherMobileNo = "Enter a valid 10-digit mobile number.";
     }
-    if (b.motherMobileNo.trim() && !MOBILE_RE.test(b.motherMobileNo.trim())) {
+    if (!b.fatherEmail.trim()) {
+      errors.fatherEmail = "Father email is required.";
+    } else if (!b.fatherEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      errors.fatherEmail = "Enter a valid email address.";
+    }
+    if (!b.motherName.trim()) {
+      errors.motherName = "Mother name is required.";
+    } else if (!NAME_RE.test(b.motherName.trim())) {
+      errors.motherName = "Mother name should contain only letters and spaces.";
+    }
+    if (!b.motherMobileNo.trim()) {
+      errors.motherMobileNo = "Mother mobile number is required.";
+    } else if (!MOBILE_RE.test(b.motherMobileNo.trim())) {
       errors.motherMobileNo = "Enter a valid 10-digit mobile number.";
+    }
+    if (!b.motherEmail.trim()) {
+      errors.motherEmail = "Mother email is required.";
+    } else if (!b.motherEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      errors.motherEmail = "Enter a valid email address.";
+    }
+    if (!b.isLocal) {
+      if (!b.guardianName.trim()) errors.guardianName = "Guardian name is required.";
+      if (!b.guardianMobileNo.trim()) errors.guardianMobileNo = "Guardian mobile number is required.";
+      if (!b.guardianEmail.trim()) errors.guardianEmail = "Guardian email is required.";
+      if (b.guardianName.trim() && !NAME_RE.test(b.guardianName.trim())) {
+        errors.guardianName = "Guardian name should contain only letters and spaces.";
+      }
+      if (b.guardianMobileNo.trim() && !MOBILE_RE.test(b.guardianMobileNo.trim())) {
+        errors.guardianMobileNo = "Enter a valid 10-digit mobile number.";
+      }
+      if (b.guardianEmail.trim() && !b.guardianEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        errors.guardianEmail = "Enter a valid email address.";
+      }
+    }
+    // Age validation for degree levels (PG requires minimum age)
+    try {
+      if ((dlIsPG(dl) || dlIsPhd(dl)) && b.dateOfBirth) {
+        const dob = new Date(b.dateOfBirth);
+        const cutoff = new Date();
+        cutoff.setFullYear(cutoff.getFullYear() - 20);
+        if (dob > cutoff) {
+          errors.dateOfBirth = "Applicant must be at least 20 years old for PG/PhD programs.";
+        }
+      }
+    } catch {
+      // ignore date parse errors here; required field check covers missing/invalid values
     }
   }
 
   if (step === 1) {
     const e = state.educationDetails;
+    const currentYear = getIndianCurrentYear();
+    const allowedSSCYears = getSSCYears(dl, currentYear);
+    const allowedIntermediateYears = getIntermediateYears(dl, e.sscYearOfPassing, currentYear);
+    const allowedUGYears = getUGYears(dl, e.intermediateYearOfPassing, currentYear);
+    const allowedPGYears = getPGYears(dl, e.ugYearOfPassing, currentYear);
+
     if (!e.sscBoard) errors.sscBoard = "Board is required.";
     if (!e.sscInstitutionName.trim()) errors.sscInstitutionName = "Institution name is required.";
     if (!e.sscHallTicketNo.trim()) errors.sscHallTicketNo = "Hall ticket number is required.";
@@ -239,6 +353,9 @@ function validateStep(
       errors.sscHallTicketNo = "Hall ticket number should contain only numbers and dot.";
     }
     if (!e.sscYearOfPassing) errors.sscYearOfPassing = "Year is required.";
+    if (e.sscYearOfPassing && !allowedSSCYears.includes(e.sscYearOfPassing)) {
+      errors.sscYearOfPassing = "Select a valid SSC passing year.";
+    }
     if (!e.sscPercentage) errors.sscPercentage = "Percentage is required.";
     if (e.sscPercentage.trim() && !PERCENT_RE.test(e.sscPercentage.trim())) {
       errors.sscPercentage = "Percentage / CGPA should contain only numbers and dot.";
@@ -259,10 +376,15 @@ function validateStep(
       errors.intermediateHallTicketNo = "Hall ticket number should contain only numbers and dot.";
     }
     if (!e.intermediateYearOfPassing) errors.intermediateYearOfPassing = "Year is required.";
+    if (e.intermediateYearOfPassing && !allowedIntermediateYears.includes(e.intermediateYearOfPassing)) {
+      errors.intermediateYearOfPassing = "Select a valid Intermediate passing year.";
+    }
     if (!e.intermediatePercentage) errors.intermediatePercentage = "Percentage is required.";
     if (e.intermediatePercentage.trim() && !PERCENT_RE.test(e.intermediatePercentage.trim())) {
       errors.intermediatePercentage = "Percentage / CGPA should contain only numbers and dot.";
     }
+    if (!state.documents.sscMemo) errors.sscMemo = "SSC / 10th document is required.";
+    if (!state.documents.intermediateMemo) errors.intermediateMemo = "Intermediate / 12th document is required.";
     // UG required only for PG and PhD applicants
     const ugRequired = dlIsPG(dl) || dlIsPhd(dl);
     if (ugRequired) {
@@ -276,10 +398,14 @@ function validateStep(
         errors.ugHallTicketNo = "Hall ticket number should contain only numbers and dot.";
       }
       if (!e.ugYearOfPassing) errors.ugYearOfPassing = "Year is required.";
+      if (e.ugYearOfPassing && !allowedUGYears.includes(e.ugYearOfPassing)) {
+        errors.ugYearOfPassing = "Select a valid UG passing year.";
+      }
       if (!e.ugPercentage) errors.ugPercentage = "Percentage is required.";
       if (e.ugPercentage?.trim() && !PERCENT_RE.test(e.ugPercentage.trim())) {
         errors.ugPercentage = "Percentage / CGPA should contain only numbers and dot.";
       }
+      if (!state.documents.ugMemo) errors.ugMemo = "UG degree document is required.";
     }
     // PG required when PG section is shown
     const showPG = dlIsPhd(dl) || e.hasPGDegree;
@@ -294,22 +420,32 @@ function validateStep(
         errors.pgHallTicketNo = "Hall ticket number should contain only numbers and dot.";
       }
       if (!e.pgYearOfPassing) errors.pgYearOfPassing = "Year is required.";
+      if (e.pgYearOfPassing && !allowedPGYears.includes(e.pgYearOfPassing)) {
+        errors.pgYearOfPassing = "Select a valid PG passing year.";
+      }
       if (!e.pgPercentage) errors.pgPercentage = "Percentage is required.";
       if (e.pgPercentage?.trim() && !PERCENT_RE.test(e.pgPercentage.trim())) {
         errors.pgPercentage = "Percentage / CGPA should contain only numbers and dot.";
       }
+      if (!state.documents.pgMemo) errors.pgMemo = "PG degree document is required.";
     }
   }
 
   if (step === 2) {
     const x = state.entranceExamDetails;
-    if (x.quallingEntranceExam.trim() && !ENTRANCE_EXAM_RE.test(x.quallingEntranceExam.trim())) {
+    if (!x.quallingEntranceExam.trim()) {
+      errors.quallingEntranceExam = "Entrance exam name is required.";
+    } else if (!ENTRANCE_EXAM_RE.test(x.quallingEntranceExam.trim())) {
       errors.quallingEntranceExam = "Entrance exam name should contain only letters and spaces.";
     }
-    if (x.entranceExamHallTicketNo.trim() && !ENTRANCE_NUM_RE.test(x.entranceExamHallTicketNo.trim())) {
+    if (!x.entranceExamHallTicketNo.trim()) {
+      errors.entranceExamHallTicketNo = "Hall ticket number is required.";
+    } else if (!ENTRANCE_NUM_RE.test(x.entranceExamHallTicketNo.trim())) {
       errors.entranceExamHallTicketNo = "Hall ticket number should contain only numbers and dot.";
     }
-    if (x.entranceExamRank.trim() && !ENTRANCE_NUM_RE.test(x.entranceExamRank.trim())) {
+    if (!x.entranceExamRank.trim()) {
+      errors.entranceExamRank = "Rank is required.";
+    } else if (!ENTRANCE_NUM_RE.test(x.entranceExamRank.trim())) {
       errors.entranceExamRank = "Rank / score should contain only numbers and dot.";
     }
   }
@@ -319,6 +455,8 @@ function validateStep(
     const ugDocRequired = dlIsPG(dl) || dlIsPhd(dl);
     const pgDocRequired = dlIsPhd(dl);
     if (!d.aadharCard) errors.aadharCard = "Aadhaar card is required.";
+    if (!d.passportPhoto) errors.passportPhoto = "Photograph is required.";
+    if (!d.studentSignature) errors.studentSignature = "Signature is required.";
     if (!d.sscMemo) errors.sscMemo = "SSC / 10th memo is required.";
     if (!d.intermediateMemo) errors.intermediateMemo = "Intermediate / 12th memo is required.";
     if (ugDocRequired && !d.ugMemo) errors.ugMemo = "UG degree certificate is required.";
@@ -329,6 +467,16 @@ function validateStep(
 
   // Steps 2 (Entrance) and 3 (Documents): no required fields
   return errors;
+}
+
+function focusFirstErrorField(errors: Record<string, string>) {
+  const firstKey = Object.keys(errors)[0];
+  if (!firstKey) return;
+  const element = document.querySelector<HTMLElement>(`[name="${firstKey}"]`);
+  if (element) {
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.focus();
+  }
 }
 
 // ── FormData builder ──────────────────────────────────────────────────────────
@@ -351,8 +499,10 @@ function buildFormData(state: ApplicationFormState): FormData {
     "state", "city", "pincode", "presentAddress", "permanentAddress",
     "fatherName", "fatherMobileNo", "fatherEmail",
     "motherName", "motherMobileNo", "motherEmail",
+    "guardianName", "guardianMobileNo", "guardianEmail",
   ];
   for (const key of basicFields) appendStr(key, b[key] as string);
+  fd.append("isLocal", String(b.isLocal));
 
   // Education details
   const sscFields: (keyof EducationDetails)[] = [
@@ -384,7 +534,7 @@ function buildFormData(state: ApplicationFormState): FormData {
 
   // Documents (PDF files)
   const docFields: (keyof UploadedDocuments)[] = [
-    "aadharCard", "sscMemo", "intermediateMemo", "ugMemo",
+    "aadharCard", "passportPhoto", "studentSignature", "sscMemo", "intermediateMemo", "ugMemo",
     "pgMemo", "gapCertificate", "bonafideCertificate", "transferCertificate",
   ];
   for (const key of docFields) {
@@ -412,8 +562,13 @@ function buildSectionFormData(step: number, state: ApplicationFormState): FormDa
       "state", "city", "pincode", "presentAddress", "permanentAddress",
       "fatherName", "fatherMobileNo", "fatherEmail",
       "motherName", "motherMobileNo", "motherEmail",
+      "guardianName", "guardianMobileNo", "guardianEmail",
     ];
     for (const key of fields) appendStr(key, b[key] as string);
+    fd.append("isLocal", String(b.isLocal));
+    if (state.documents.aadharCard?.file) {
+      fd.append("aadharCard", state.documents.aadharCard.file, state.documents.aadharCard.name);
+    }
   }
 
   if (step === 1) {
@@ -428,12 +583,21 @@ function buildSectionFormData(step: number, state: ApplicationFormState): FormDa
     appendStr("intermediateHallTicketNo", e.intermediateHallTicketNo);
     appendStr("intermediateYearOfPassing", e.intermediateYearOfPassing);
     appendStr("intermediatePercentage", e.intermediatePercentage);
+    if (state.documents.sscMemo?.file) {
+      fd.append("sscMemo", state.documents.sscMemo.file, state.documents.sscMemo.name);
+    }
+    if (state.documents.intermediateMemo?.file) {
+      fd.append("intermediateMemo", state.documents.intermediateMemo.file, state.documents.intermediateMemo.name);
+    }
     if (e.hasUGDegree) {
       appendStr("ugBoard", e.ugBoard);
       appendStr("ugInstitutionName", e.ugInstitutionName);
       appendStr("ugHallTicketNo", e.ugHallTicketNo);
       appendStr("ugYearOfPassing", e.ugYearOfPassing);
       appendStr("ugPercentage", e.ugPercentage);
+      if (state.documents.ugMemo?.file) {
+        fd.append("ugMemo", state.documents.ugMemo.file, state.documents.ugMemo.name);
+      }
     }
     if (e.hasPGDegree) {
       appendStr("pgBoard", e.pgBoard);
@@ -441,6 +605,9 @@ function buildSectionFormData(step: number, state: ApplicationFormState): FormDa
       appendStr("pgHallTicketNo", e.pgHallTicketNo);
       appendStr("pgYearOfPassing", e.pgYearOfPassing);
       appendStr("pgPercentage", e.pgPercentage);
+      if (state.documents.pgMemo?.file) {
+        fd.append("pgMemo", state.documents.pgMemo.file, state.documents.pgMemo.name);
+      }
     }
   }
 
@@ -455,7 +622,7 @@ function buildSectionFormData(step: number, state: ApplicationFormState): FormDa
   if (step === 3) {
     const d = state.documents;
     const docFields: (keyof UploadedDocuments)[] = [
-      "aadharCard", "sscMemo", "intermediateMemo", "ugMemo",
+      "aadharCard", "passportPhoto", "studentSignature", "sscMemo", "intermediateMemo", "ugMemo",
       "pgMemo", "gapCertificate", "bonafideCertificate", "transferCertificate",
     ];
     for (const key of docFields) {
@@ -491,6 +658,15 @@ function ApplicationPage() {
   // (an empty draft with hasDraft=true would block full server hydration on the
   // next page load, making all fields appear blank).
   const hasServerData = useRef(false);
+  const dobMax = useMemo(() => {
+    const today = new Date();
+    if (dlIsPG(degreeLevel) || dlIsPhd(degreeLevel)) {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 20);
+      return d.toISOString().split("T")[0];
+    }
+    return today.toISOString().split("T")[0];
+  }, [degreeLevel]);
 
   // ── Mount: resolve applicationId + load scoped local draft ──────────────────
 
@@ -515,6 +691,7 @@ function ApplicationPage() {
           setAppState({
             ...INITIAL_STATE,
             ...parsed,
+            currentStep: 0,
             entranceExamDetails: parsed.entranceExamDetails ?? EMPTY_ENTRANCE,
             consentDeclaration: parsed.consentDeclaration ?? "",
             documents: docs,
@@ -554,14 +731,22 @@ function ApplicationPage() {
     fetch(`${API_BASE}/api/student-application/get/${applicationId}`, {
       credentials: "include",
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(async (r) => {
+        if (!r.ok) return Promise.reject(r.status);
+        syncIndianClockWithServer(r.headers.get("date"));
+        return r.json();
+      })
       .then(async ({ data }) => {
         // Fetch payment status in parallel — non-blocking, ignore on error
         const feeStatus = await fetch(
           `${API_BASE}/api/application-fee/status/${applicationId}`,
           { credentials: "include" }
         )
-          .then((r) => (r.ok ? r.json() : null))
+          .then(async (r) => {
+            if (!r.ok) return null;
+            syncIndianClockWithServer(r.headers.get("date"));
+            return r.json();
+          })
           .catch(() => null) as { paymentStatus?: string } | null;
 
         const serverPaymentStatus: PaymentStatus =
@@ -594,6 +779,8 @@ function ApplicationPage() {
 
         const serverDocs: UploadedDocuments = {
           aadharCard:          mkDoc(data.documents?.aadharCard,          "aadharCard.pdf"),
+          passportPhoto:       mkDoc(data.documents?.passportPhoto,       "passportPhoto.jpg"),
+          studentSignature:    mkDoc(data.documents?.studentSignature,    "studentSignature.jpg"),
           sscMemo:             mkDoc(data.documents?.sscMemo,             "sscMemo.pdf"),
           intermediateMemo:    mkDoc(data.documents?.intermediateMemo,    "intermediateMemo.pdf"),
           ugMemo:              mkDoc(data.documents?.ugMemo,              "ugMemo.pdf"),
@@ -636,12 +823,16 @@ function ApplicationPage() {
               pincode:          toStr(data.pincode),
               presentAddress:   toStr(data.presentAddress),
               permanentAddress: toStr(data.permanentAddress),
+              isLocal:          data.isLocal ?? true,
               fatherName:       toStr(data.fatherName),
               fatherMobileNo:   toStr(data.fatherMobileNo),
               fatherEmail:      toStr(data.fatherEmail),
               motherName:       toStr(data.motherName),
               motherMobileNo:   toStr(data.motherMobileNo),
               motherEmail:      toStr(data.motherEmail),
+              guardianName:     toStr(data.guardianName),
+              guardianMobileNo: toStr(data.guardianMobileNo),
+              guardianEmail:    toStr(data.guardianEmail),
             },
             educationDetails: edu
               ? {
@@ -700,6 +891,8 @@ function ApplicationPage() {
             },
             documents: {
               aadharCard:          s.documents.aadharCard?.file          ? s.documents.aadharCard          : serverDocs.aadharCard,
+              passportPhoto:       s.documents.passportPhoto?.file       ? s.documents.passportPhoto       : serverDocs.passportPhoto,
+              studentSignature:    s.documents.studentSignature?.file    ? s.documents.studentSignature    : serverDocs.studentSignature,
               sscMemo:             s.documents.sscMemo?.file             ? s.documents.sscMemo             : serverDocs.sscMemo,
               intermediateMemo:    s.documents.intermediateMemo?.file    ? s.documents.intermediateMemo    : serverDocs.intermediateMemo,
               ugMemo:              s.documents.ugMemo?.file              ? s.documents.ugMemo              : serverDocs.ugMemo,
@@ -798,7 +991,7 @@ function ApplicationPage() {
     // are sent together in a single request).
     if (step === 3) {
       const docKeys: (keyof UploadedDocuments)[] = [
-        "aadharCard", "sscMemo", "intermediateMemo", "ugMemo",
+        "aadharCard", "passportPhoto", "studentSignature", "sscMemo", "intermediateMemo", "ugMemo",
         "pgMemo", "gapCertificate", "bonafideCertificate", "transferCertificate",
       ];
       const pendingDocs = docKeys.filter((k) => state.documents[k]?.file != null);
@@ -943,12 +1136,22 @@ function ApplicationPage() {
   // ── Navigation ───────────────────────────────────────────────────────────────
 
   const handleNext = useCallback(async () => {
-    if (isSaving) return;
-    const stepErrors = validateStep(appState.currentStep, appState, degreeLevel);
-    if (Object.keys(stepErrors).length > 0) {
-      setErrors(stepErrors);
+    console.log("🔍 handleNext called, currentStep:", appState.currentStep);
+    if (isSaving) {
+      console.log("⏳ Already saving, returning");
       return;
     }
+    const stepErrors = validateStep(appState.currentStep, appState, degreeLevel);
+    console.log("✓ Validation errors:", stepErrors);
+    if (Object.keys(stepErrors).length > 0) {
+      console.log("❌ Found validation errors, setting errors state:", stepErrors);
+      setErrors(stepErrors);
+      setTimeout(() => {
+        focusFirstErrorField(stepErrors);
+      }, 100);
+      return;
+    }
+    console.log("✅ No validation errors, proceeding to save");
     setErrors({});
     setIsSaving(true);
     setSaveError("");
@@ -957,9 +1160,13 @@ function ApplicationPage() {
     setIsSaving(false);
     if (!saved) return;
     const nextStep = Math.min(appState.currentStep + 1, TOTAL_STEPS - 1);
-    const updated = { ...appState, currentStep: nextStep };
-    setAppState(updated);
-    persistDraft(updated);
+    // Use a functional updater so we don't overwrite the state updates
+    // (e.g. server-returned previewUrls) that saveSectionToServer applied.
+    setAppState((s) => {
+      const updated = { ...s, currentStep: nextStep };
+      persistDraft(updated);
+      return updated;
+    });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [appState, degreeLevel, isSaving, saveSectionToServer, persistDraft]);
 
@@ -989,6 +1196,28 @@ function ApplicationPage() {
         setErrors((prev) => {
           const next = { ...prev };
           for (const k of Object.keys(updates)) delete next[k];
+          return next;
+        });
+      }
+    },
+    [errors]
+  );
+
+  const handleAadharCardFileChange = useCallback(
+    (file: File | null) => {
+      setAppState((s) => ({
+        ...s,
+        documents: {
+          ...s.documents,
+          aadharCard: file
+            ? { name: file.name, size: file.size, previewUrl: URL.createObjectURL(file), file }
+            : null,
+        },
+      }));
+      if (errors.aadharCard) {
+        setErrors((prev) => {
+          const next = { ...prev };
+          delete next.aadharCard;
           return next;
         });
       }
@@ -1036,8 +1265,15 @@ function ApplicationPage() {
         ...s,
         entranceExamDetails: { ...s.entranceExamDetails, ...updates },
       }));
+      if (Object.keys(updates).some((k) => errors[k])) {
+        setErrors((prev) => {
+          const next = { ...prev };
+          for (const k of Object.keys(updates)) delete next[k];
+          return next;
+        });
+      }
     },
-    []
+    [errors]
   );
 
   const handleGapToggle = useCallback((val: boolean) => {
@@ -1047,6 +1283,35 @@ function ApplicationPage() {
   const handleConsentChange = useCallback((value: string) => {
     setAppState((s) => ({ ...s, consentDeclaration: value }));
   }, []);
+
+  // Check Aadhaar uniqueness when a full 12-digit number is entered.
+  useEffect(() => {
+    const num = appState.basicDetails.aadharNo?.trim() || "";
+    if (num.length !== 12) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/applications/check-aadhar?number=${encodeURIComponent(num)}`, {
+          credentials: "include",
+        });
+        if (!res.ok) return; // endpoint missing or error — skip
+        const json = await res.json();
+        if (cancelled) return;
+        if (json?.exists) {
+          setErrors((prev) => ({ ...prev, aadharNo: "Aadhaar number is already used." }));
+        } else {
+          setErrors((prev) => {
+            const next = { ...prev };
+            delete next.aadharNo;
+            return next;
+          });
+        }
+      } catch {
+        // network error — don't block user
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [appState.basicDetails.aadharNo]);
 
   // ── Payment & Submit ─────────────────────────────────────────────────────────
 
@@ -1186,15 +1451,20 @@ function ApplicationPage() {
               <BasicDetailsStep
                 data={appState.basicDetails}
                 errors={errors}
+                aadharCardDocument={appState.documents.aadharCard}
                 onChange={handleBasicChange}
+                onAadharCardFileChange={handleAadharCardFileChange}
+                dobMax={dobMax}
               />
             )}
             {currentStep === 1 && (
               <EducationDetailsStep
                 data={appState.educationDetails}
                 errors={errors}
+                documents={appState.documents}
                 degreeLevel={degreeLevel}
                 onChange={handleEducationChange}
+                onDocumentChange={handleDocumentsChange}
               />
             )}
             {currentStep === 2 && (
@@ -1241,6 +1511,33 @@ function ApplicationPage() {
               </div>
             )}
 
+            {/* Show error summary if there are validation errors */}
+            {Object.keys(errors).length > 0 && (
+              <div className="mt-6 space-y-3 rounded-lg border-2 border-red-500 bg-red-50 p-5 shadow-md">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 pt-0.5">
+                    <svg className="h-6 w-6 text-red-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-sm font-bold text-red-900">
+                      ⚠️ Please check below mentioned fields before proceeding
+                    </h3>
+                    <p className="mt-1 text-xs text-red-800">Fill all required fields marked with <span className="font-bold text-red-600">*</span></p>
+                    <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-red-900 font-medium">
+                      {Object.values(errors).slice(0, 8).map((err, idx) => (
+                        <li key={idx}>{err}</li>
+                      ))}
+                      {Object.keys(errors).length > 8 && (
+                        <li className="text-red-700">... and {Object.keys(errors).length - 8} more field{Object.keys(errors).length - 8 !== 1 ? 's' : ''}</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Navigation actions (hidden on preview step — it has its own) */}
             {currentStep < TOTAL_STEPS - 1 && (
               <div className="mt-6">
@@ -1248,6 +1545,7 @@ function ApplicationPage() {
                   currentStep={currentStep}
                   totalSteps={TOTAL_STEPS}
                   isSaving={isSaving}
+                  hasErrors={Object.keys(errors).length > 0}
                   onBack={handleBack}
                   onSaveDraft={handleSaveDraft}
                   onNext={handleNext}

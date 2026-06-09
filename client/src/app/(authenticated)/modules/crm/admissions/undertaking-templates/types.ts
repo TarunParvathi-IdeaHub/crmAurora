@@ -8,16 +8,16 @@ export type SectionType =
   | "table"
   | "signature";
 
-export interface SectionItem {
-  id: string;
-  content: string;
-}
-
 export interface TemplateSection {
   id: string;
   title: string;
-  type: SectionType;
   items: SectionItem[];
+}
+
+export interface SectionItem {
+  id: string;
+  type: SectionType;
+  content: string;
 }
 
 export interface HeaderField {

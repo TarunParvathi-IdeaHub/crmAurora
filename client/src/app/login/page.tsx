@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:5000';
@@ -57,6 +58,12 @@ export default function LoginPage() {
       }
 
       localStorage.setItem('erpUser', JSON.stringify(data));
+
+      if (data?.isFirstLogin) {
+        router.push('/change-password');
+        return;
+      }
+
       router.push('/dashboard');
     } catch {
       setError('Unable to connect to the backend. Please ensure the server is running.');
@@ -173,9 +180,9 @@ export default function LoginPage() {
                   </button>
                 </div>
                 <div className="flex justify-end pt-1">
-                  <a href="#" className="text-[13px] text-[#5584f1] font-medium hover:underline">
+                  <Link href="/forgot-password" className="text-[13px] text-[#5584f1] font-medium hover:underline">
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
               </div>
 

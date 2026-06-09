@@ -138,9 +138,15 @@ const STATUS_META: Partial<
 function getFileType(url: string | null): "image" | "pdf" | "other" {
   if (!url) return "other";
   try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    if (/\.(jpg|jpeg|png|gif|webp)/.test(pathname)) return "image";
-    if (/\.pdf/.test(pathname)) return "pdf";
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.toLowerCase();
+    const full = url.toLowerCase();
+    if (/\.(jpg|jpeg|png|gif|webp)/.test(pathname) || /\.(jpg|jpeg|png|gif|webp)\b/.test(full)) {
+      return "image";
+    }
+    if (/\.pdf/.test(pathname) || /\.pdf\b/.test(full) || /content-type=application\/pdf/.test(full)) {
+      return "pdf";
+    }
     return "other";
   } catch {
     return "other";
@@ -484,7 +490,7 @@ export default function DocumentVerificationClient({ applicationId }: Props) {
     <div className="flex flex-col min-h-screen bg-slate-50">
 
       {/* ── Sticky header ──────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm">
+      <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 px-6 py-4 max-w-6xl mx-auto">
           <button
             type="button"
@@ -637,12 +643,25 @@ export default function DocumentVerificationClient({ applicationId }: Props) {
                       </button>
                     )}
 
-                    {/* PDF placeholder */}
-                    {fileType !== "image" && (
+                    {/* PDF preview / placeholder */}
+                    {fileType === "pdf" && (
+                      <div className="h-56 bg-slate-50 border-b border-slate-100">
+                        <object
+                          data={url}
+                          type="application/pdf"
+                          className="h-full w-full"
+                        >
+                          <div className="flex h-full items-center justify-center text-slate-400 text-xs">
+                            Preview unavailable
+                          </div>
+                        </object>
+                      </div>
+                    )}
+                    {fileType !== "image" && fileType !== "pdf" && (
                       <div className="flex items-center justify-center h-24 bg-slate-50 border-b border-slate-100">
                         <div className="flex flex-col items-center gap-1 text-slate-400">
                           <FileText size={28} />
-                          <span className="text-xs">PDF Document</span>
+                          <span className="text-xs">Document Preview</span>
                         </div>
                       </div>
                     )}

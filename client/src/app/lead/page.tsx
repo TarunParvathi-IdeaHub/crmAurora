@@ -54,13 +54,11 @@ const INDIAN_STATES: string[] = [
 ];
 
 const SOURCE_OPTIONS = [
-  'Google Search',
   'Social Media',
   'Friend / Family',
-  'School / College',
   'Advertisement',
   'Education Fair',
-  'Alumni Referral',
+  'Alumni',
   'Other',
 ];
 
@@ -68,17 +66,6 @@ const SOURCE_OPTIONS = [
 const CAMPUS_PHOTO_URL = 'https://images.unsplash.com/photo-1562774053-701939374585?w=1600&auto=format&fit=crop&q=80';
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STATS = [
-  { value: '25+', label: 'Years of Excellence' },
-  { value: '10K+', label: 'Alumni Network' },
-  { value: '50+', label: 'Programmes' },
-];
-
-const ACCREDITATIONS = [
-  { label: 'NAAC A+', icon: Award },
-  { label: 'UGC Approved', icon: Shield },
-  { label: 'NIRF Ranked', icon: Star },
-];
 
 // ── Animation variants ───────────────────────────────────────────────────────
 
@@ -126,6 +113,7 @@ type LeadFormData = {
   programId: string;
   admissionCycleId: string;
   admissionCycleName: string;
+  SOURCE_OPTIONS: typeof SOURCE_OPTIONS;
 };
 
 type SelectOption = {
@@ -144,6 +132,7 @@ const emptyForm: LeadFormData = {
   programId: '',
   admissionCycleId: '',
   admissionCycleName: '',
+  SOURCE_OPTIONS: SOURCE_OPTIONS,
 };
 
 // ── Page component ───────────────────────────────────────────────────────────
@@ -459,6 +448,7 @@ export default function LeadPage() {
           degreeLevelId:   formData.degreeLevelId,
           programId:       formData.programId,
           admissionCycleId: formData.admissionCycleId,
+          sourceType: formData.SOURCE_OPTIONS.includes(source) ? source : 'Other',
         }),
       });
 
@@ -509,6 +499,7 @@ export default function LeadPage() {
               <GraduationCap className="h-5 w-5 text-white" />
             </div>
             <div>
+              
               <p className="text-sm font-bold leading-tight text-white">Aurora University</p>
               <p className="text-[10px] text-white/60 tracking-wide uppercase">Deemed to be University</p>
             </div>
@@ -542,32 +533,14 @@ export default function LeadPage() {
               to shape tomorrow&apos;s leaders and innovators.
             </motion.p>
 
-            {/* Accreditation badges */}
-            <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="mt-8 flex flex-wrap gap-3">
-              {ACCREDITATIONS.map(({ label, icon: Icon }) => (
-                <motion.div key={label} variants={cardVariant} className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 backdrop-blur-sm ring-1 ring-white/20">
-                  <Icon className="h-3.5 w-3.5 text-[#fbbf24]" />
-                  <span className="text-xs font-semibold text-white">{label}</span>
-                </motion.div>
-              ))}
-            </motion.div>
-
-            {/* Stats row */}
-            <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
-              {STATS.map(({ value, label }) => (
-                <motion.div key={label} variants={cardVariant}>
-                  <p className="text-3xl font-extrabold text-white">{value}</p>
-                  <p className="mt-0.5 text-xs text-white/55">{label}</p>
-                </motion.div>
-              ))}
-            </motion.div>
+           
 
             {/* Feature highlights */}
             <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="mt-10 space-y-3">
               {[
                 { icon: BookOpen, text: 'Industry-focused curriculum & live projects' },
-                { icon: Users,    text: 'Experienced faculty with global expertise' },
-                { icon: Award,    text: '95% placement rate with 500+ recruiters' },
+                { icon: Users,    text: 'Experienced faculty with national expertise' },
+                { icon: Award,    text: 'Hands-on learning experience' },
               ].map(({ icon: Icon, text }) => (
                 <motion.div key={text} variants={cardVariant} className="flex items-center gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#60a5fa]/20">

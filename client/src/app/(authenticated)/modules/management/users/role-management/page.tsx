@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { EllipsisVertical, PencilLine, Plus, Trash2 } from "lucide-react";
 import { useRole } from "@/lib/hooks/useRole";
+import { authFetch } from "@/lib/utils/authFetch";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
@@ -52,7 +53,7 @@ export default function RoleManagementPage() {
   // ── Fetch institutions ──────────────────────────────────────────────────────
   useEffect(() => {
     if (role === "collegeAdmin") {
-      fetch(`${API_BASE_URL}/api/institutions/current`, { credentials: "include" })
+      authFetch(`${API_BASE_URL}/api/institutions/current`)
         .then((r) => r.json())
         .then((d: { institution?: Institution }) => {
           if (d.institution) {
@@ -62,7 +63,7 @@ export default function RoleManagementPage() {
         })
         .catch(() => {});
     } else {
-      fetch(`${API_BASE_URL}/api/institutions`, { credentials: "include" })
+      authFetch(`${API_BASE_URL}/api/institutions`)
         .then((r) => r.json())
         .then((d) => setInstitutions(d.institutions ?? []))
         .catch(() => {});
@@ -80,7 +81,7 @@ export default function RoleManagementPage() {
   // ── Fetch roles ─────────────────────────────────────────────────────────────
   const fetchRoles = (institutionId?: string) => {
     const qs = institutionId ? `?institutionId=${encodeURIComponent(institutionId)}` : "";
-    fetch(`${API_BASE_URL}/api/employee-roles/getall${qs}`, { credentials: "include" })
+    authFetch(`${API_BASE_URL}/api/employee-roles/getall${qs}`)
       .then((r) => r.json())
       .then((d) => setRoles(d.employeeRoles ?? []))
       .catch(() => {});
@@ -137,10 +138,9 @@ export default function RoleManagementPage() {
           ? `${API_BASE_URL}/api/employee-roles/${editingId}`
           : `${API_BASE_URL}/api/employee-roles/create`;
 
-      const resp = await fetch(url, {
+      const resp = await authFetch(url, {
         method: mode === "edit" ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(payload),
       });
 
@@ -172,9 +172,8 @@ export default function RoleManagementPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/employee-roles/${id}`, {
+      const resp = await authFetch(`${API_BASE_URL}/api/employee-roles/${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
       if (resp.ok) {
         setDeleteConfirmId(null);

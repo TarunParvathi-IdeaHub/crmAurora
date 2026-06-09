@@ -12,6 +12,7 @@ import {
   ToggleRight,
 } from "lucide-react";
 import { useRole } from "@/lib/hooks/useRole";
+import { authFetch } from "@/lib/utils/authFetch";
 
 type Institution = {
   id: string;
@@ -72,7 +73,7 @@ const emptyForm = {
 };
 
 const fieldValidationMessages = {
-  programCode: "Programme code can contain only letters, hyphens and dots.",
+  programCode: "Programme code can contain only letters, numbers, and hyphens.",
   programName: "Programme name can contain only letters, dots and spaces.",
   programSname: "Programme shortcut can contain only letters and dots.",
 } as const;
@@ -82,14 +83,14 @@ const fieldSanitizers = {
   levelId: (value: string) => value,
   schoolId: (value: string) => value,
   departmentId: (value: string) => value,
-  programCode: (value: string) => value.replace(/[^A-Za-z.\-\s]/g, ""),
+  programCode: (value: string) => value.replace(/[^A-Za-z0-9\-]/g, ""),
   programName: (value: string) => value.replace(/[^A-Za-z.\s]/g, ""),
   programSname: (value: string) => value.replace(/[^A-Za-z.\s]/g, ""),
   isActive: (value: string) => value,
 } as const;
 
 const fieldValidators = {
-  programCode: /^[A-Za-z.\-]+$/,
+  programCode: /^[A-Za-z0-9\-]+$/,
   programName: /^[A-Za-z.\s]+$/,
   programSname: /^[A-Za-z.\s]+$/,
 } as const;
@@ -137,7 +138,7 @@ export default function ProgrammeManagementPage() {
     const loadInstitutions = async () => {
       if (role === "collegeAdmin") {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/institutions/current`, { credentials: "include" });
+          const response = await authFetch(`${API_BASE_URL}/api/institutions/current`);
           if (!response.ok) return;
           const data = await response.json() as { institution: Institution };
           if (data.institution) {
@@ -149,7 +150,7 @@ export default function ProgrammeManagementPage() {
         }
       } else {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/institutions`, { credentials: "include" });
+          const response = await authFetch(`${API_BASE_URL}/api/institutions`);
           if (!response.ok) return;
           const data = await response.json() as { institutions: (Institution & { isActive?: boolean })[] };
           setInstitutions((data.institutions ?? []).map((i) => ({ ...i, isActive: i.isActive ?? true })));
@@ -173,9 +174,7 @@ export default function ProgrammeManagementPage() {
   useEffect(() => {
     const loadProgrammes = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/programmes`, {
-          credentials: "include",
-        });
+        const response = await authFetch(`${API_BASE_URL}/api/programmes`);
         if (!response.ok) return;
         const data = await response.json() as {
           programmes: {
@@ -225,9 +224,8 @@ export default function ProgrammeManagementPage() {
     }
     const load = async () => {
       try {
-        const response = await fetch(
+        const response = await authFetch(
           `${API_BASE_URL}/api/degree-levels/by-institution/${formData.institutionId}`,
-          { credentials: "include" }
         );
         if (!response.ok) return;
         const data = await response.json() as { degreeLevels: DegreeLevel[] };
@@ -247,9 +245,8 @@ export default function ProgrammeManagementPage() {
     }
     const load = async () => {
       try {
-        const response = await fetch(
+        const response = await authFetch(
           `${API_BASE_URL}/api/schools/by-institution/${formData.institutionId}`,
-          { credentials: "include" }
         );
         if (!response.ok) return;
         const data = await response.json() as { schools: SchoolOption[] };
@@ -272,7 +269,7 @@ export default function ProgrammeManagementPage() {
         const url = formData.schoolId
           ? `${API_BASE_URL}/api/departments/by-school/${formData.schoolId}`
           : `${API_BASE_URL}/api/departments/by-institution/${formData.institutionId}`;
-        const response = await fetch(url, { credentials: "include" });
+        const response = await authFetch(url);
         if (!response.ok) return;
         const data = await response.json() as {
           departments: { id: string; departmentCode: string; name: string; institutionId: string; schoolId: string | null }[];
@@ -367,10 +364,9 @@ export default function ProgrammeManagementPage() {
 
     try {
       if (editingId) {
-        const response = await fetch(`${API_BASE_URL}/api/programmes/update`, {
+        const response = await authFetch(`${API_BASE_URL}/api/programmes/update`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({
             id: editingId,
             programCode: normalizedFormData.programCode.trim(),
@@ -411,10 +407,9 @@ export default function ProgrammeManagementPage() {
         );
         resetForm();
       } else {
-        const response = await fetch(`${API_BASE_URL}/api/programmes/create`, {
+        const response = await authFetch(`${API_BASE_URL}/api/programmes/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify({
               programCode: normalizedFormData.programCode.trim(),
               programName: normalizedFormData.programName.trim(),
@@ -476,10 +471,9 @@ export default function ProgrammeManagementPage() {
   const handleDelete = async (id: string) => {
     setError("");
     try {
-      const response = await fetch(`${API_BASE_URL}/api/programmes/delete`, {
+      const response = await authFetch(`${API_BASE_URL}/api/programmes/delete`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ id }),
       });
       const data = await response.json().catch(() => null) as { error?: string };

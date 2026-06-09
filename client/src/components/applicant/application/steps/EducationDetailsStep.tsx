@@ -1,9 +1,17 @@
 "use client";
 
-import type { EducationDetails } from "@/types/applicant";
+import { useEffect, useMemo } from "react";
+import type { DocumentFile, EducationDetails, UploadedDocuments } from "@/types/applicant";
+import {
+  getIndianCurrentYear,
+  getIntermediateYears,
+  getPGYears,
+  getSSCYears,
+  getUGYears,
+  normalizeStudyLevel,
+} from "@/lib/utils/admissionDateRules";
 
 const BOARDS = ["AP State Board", "TS State Board", "CBSE", "ICSE", "IB", "IGCSE", "Other"];
-const YEARS = Array.from({ length: 20 }, (_, i) => String(new Date().getFullYear() - i));
 
 const ONLY_ALPHA_SPACE = /[^A-Za-z\s]/g;
 const ONLY_DIGITS_DOT = /[^\d.]/g;
@@ -32,7 +40,9 @@ function FieldError({ message }: { message?: string }) {
 type EducationDetailsStepProps = {
   data: EducationDetails;
   errors: Record<string, string>;
+  documents: UploadedDocuments;
   onChange: (updates: Partial<EducationDetails>) => void;
+  onDocumentChange: (updates: Partial<UploadedDocuments>) => void;
   /** levelName from the backend, e.g. "Under Graduate (UG)" */
   degreeLevel?: string;
 };
@@ -40,9 +50,34 @@ type EducationDetailsStepProps = {
 export default function EducationDetailsStep({
   data,
   errors,
+  documents,
   onChange,
+  onDocumentChange,
   degreeLevel = "",
 }: EducationDetailsStepProps) {
+  const currentYear = getIndianCurrentYear();
+  const studyLevel = useMemo(() => normalizeStudyLevel(degreeLevel), [degreeLevel]);
+
+  const sscYears = useMemo(
+    () => getSSCYears(studyLevel, currentYear),
+    [studyLevel, currentYear]
+  );
+
+  const intermediateYears = useMemo(
+    () => getIntermediateYears(studyLevel, data.sscYearOfPassing, currentYear),
+    [studyLevel, data.sscYearOfPassing, currentYear]
+  );
+
+  const ugYears = useMemo(
+    () => getUGYears(studyLevel, data.intermediateYearOfPassing, currentYear),
+    [studyLevel, data.intermediateYearOfPassing, currentYear]
+  );
+
+  const pgYears = useMemo(
+    () => getPGYears(studyLevel, data.ugYearOfPassing, currentYear),
+    [studyLevel, data.ugYearOfPassing, currentYear]
+  );
+
   const handle = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -72,8 +107,121 @@ export default function EducationDetailsStep({
         break;
     }
 
+    if (name === "sscYearOfPassing") {
+      onChange({
+        sscYearOfPassing: nextValue,
+        intermediateYearOfPassing: "",
+        ugYearOfPassing: "",
+        pgYearOfPassing: "",
+      });
+      return;
+    }
+
+    if (name === "intermediateYearOfPassing") {
+      onChange({
+        intermediateYearOfPassing: nextValue,
+        ugYearOfPassing: "",
+        pgYearOfPassing: "",
+      });
+      return;
+    }
+
+    if (name === "ugYearOfPassing") {
+      onChange({
+        ugYearOfPassing: nextValue,
+        pgYearOfPassing: "",
+      });
+      return;
+    }
+
     onChange({ [name]: nextValue });
   };
+
+  useEffect(() => {
+    if (!data.sscYearOfPassing) return;
+    if (sscYears.includes(data.sscYearOfPassing)) return;
+
+    onChange({
+      sscYearOfPassing: "",
+      intermediateYearOfPassing: "",
+      ugYearOfPassing: "",
+      pgYearOfPassing: "",
+    });
+  }, [data.sscYearOfPassing, onChange, sscYears]);
+
+  useEffect(() => {
+    if (!data.intermediateYearOfPassing) return;
+    if (intermediateYears.includes(data.intermediateYearOfPassing)) return;
+
+    onChange({
+      intermediateYearOfPassing: "",
+      ugYearOfPassing: "",
+      pgYearOfPassing: "",
+    });
+  }, [data.intermediateYearOfPassing, intermediateYears, onChange]);
+
+  useEffect(() => {
+    if (!data.ugYearOfPassing) return;
+    if (ugYears.includes(data.ugYearOfPassing)) return;
+
+    onChange({
+      ugYearOfPassing: "",
+      pgYearOfPassing: "",
+    });
+  }, [data.ugYearOfPassing, onChange, ugYears]);
+
+  useEffect(() => {
+    if (!data.pgYearOfPassing) return;
+    if (pgYears.includes(data.pgYearOfPassing)) return;
+
+    onChange({ pgYearOfPassing: "" });
+  }, [data.pgYearOfPassing, onChange, pgYears]);
+
+  const handleDocumentFileChange = (
+    key: keyof UploadedDocuments,
+    file: File | null
+  ) => {
+    onDocumentChange({ [key]: file ? {
+      name: file.name,
+      size: file.size,
+      previewUrl: null,
+      file,
+    } : null });
+  };
+
+  const renderFileUpload = (
+    label: string,
+    key: keyof UploadedDocuments,
+    error?: string,
+    required = false
+  ) => (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <Label required={required}>{label}</Label>
+        <span className="text-xs text-slate-500">PDF only, max 5 MB</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <label htmlFor={key} className="inline-flex cursor-pointer items-center rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-400 hover:bg-white">
+          Choose file
+        </label>
+        <input
+          id={key}
+          name={key}
+          type="file"
+          accept="application/pdf"
+          onChange={(e) => {
+            const file = e.target.files?.[0] ?? null;
+            handleDocumentFileChange(key, file);
+          }}
+          className="sr-only"
+        />
+        <span className="min-w-0 truncate text-sm text-slate-500">
+          {documents[key]?.name || "No file chosen"}
+        </span>
+      </div>
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+    </div>
+  );
 
   // Derive UG/PG section visibility from degree level
   const _dl = (degreeLevel ?? "").toLowerCase();
@@ -154,7 +302,7 @@ export default function EducationDetailsStep({
               className={errors.sscYearOfPassing ? errorInputCls : selectCls}
             >
               <option value="">— Select year —</option>
-              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+              {sscYears.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <FieldError message={errors.sscYearOfPassing} />
           </div>
@@ -173,6 +321,7 @@ export default function EducationDetailsStep({
             <FieldError message={errors.sscPercentage} />
           </div>
         </div>
+        {renderFileUpload("Upload SSC / 10th Document", "sscMemo", errors.sscMemo, true)}
       </div>
 
       <hr className="border-slate-200" />
@@ -230,10 +379,13 @@ export default function EducationDetailsStep({
               name="intermediateYearOfPassing"
               value={data.intermediateYearOfPassing}
               onChange={handle}
-              className={errors.intermediateYearOfPassing ? errorInputCls : selectCls}
+              disabled={!data.sscYearOfPassing}
+              className={`${errors.intermediateYearOfPassing ? errorInputCls : selectCls} disabled:cursor-not-allowed disabled:bg-slate-100`}
             >
-              <option value="">— Select year —</option>
-              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+              <option value="">
+                {data.sscYearOfPassing ? "— Select year —" : "Select SSC Year First"}
+              </option>
+              {intermediateYears.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <FieldError message={errors.intermediateYearOfPassing} />
           </div>
@@ -252,6 +404,7 @@ export default function EducationDetailsStep({
             <FieldError message={errors.intermediatePercentage} />
           </div>
         </div>
+        {renderFileUpload("Upload Intermediate / 12th Document", "intermediateMemo", errors.intermediateMemo, true)}
       </div>
 
       {showUG && <hr className="border-slate-200" />}
@@ -306,9 +459,17 @@ export default function EducationDetailsStep({
           </div>
           <div>
             <Label required={ugRequired}>Year of Passing</Label>
-            <select name="ugYearOfPassing" value={data.ugYearOfPassing} onChange={handle} className={errors.ugYearOfPassing ? errorInputCls : selectCls}>
-              <option value="">— Select year —</option>
-              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+            <select
+              name="ugYearOfPassing"
+              value={data.ugYearOfPassing}
+              onChange={handle}
+              disabled={!data.intermediateYearOfPassing}
+              className={`${errors.ugYearOfPassing ? errorInputCls : selectCls} disabled:cursor-not-allowed disabled:bg-slate-100`}
+            >
+              <option value="">
+                {data.intermediateYearOfPassing ? "— Select year —" : "Select Intermediate Year First"}
+              </option>
+              {ugYears.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <FieldError message={errors.ugYearOfPassing} />
           </div>
@@ -327,6 +488,7 @@ export default function EducationDetailsStep({
             <FieldError message={errors.ugPercentage} />
           </div>
         </div>
+        {renderFileUpload("Upload UG Degree Document", "ugMemo", errors.ugMemo, ugRequired)}
       </div>
       )}
 
@@ -381,9 +543,17 @@ export default function EducationDetailsStep({
             </div>
             <div>
               <Label required={pgRequired}>Year of Passing</Label>
-              <select name="pgYearOfPassing" value={data.pgYearOfPassing} onChange={handle} className={errors.pgYearOfPassing ? errorInputCls : selectCls}>
-                <option value="">— Select year —</option>
-                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+              <select
+                name="pgYearOfPassing"
+                value={data.pgYearOfPassing}
+                onChange={handle}
+                disabled={!data.ugYearOfPassing}
+                className={`${errors.pgYearOfPassing ? errorInputCls : selectCls} disabled:cursor-not-allowed disabled:bg-slate-100`}
+              >
+                <option value="">
+                  {data.ugYearOfPassing ? "— Select year —" : "Select UG Year First"}
+                </option>
+                {pgYears.map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
               <FieldError message={errors.pgYearOfPassing} />
             </div>
@@ -402,8 +572,10 @@ export default function EducationDetailsStep({
               <FieldError message={errors.pgPercentage} />
             </div>
           </div>
+          {renderFileUpload("Upload PG Degree Document", "pgMemo", errors.pgMemo, pgRequired)}
         </div>
       )}
     </div>
   );
 }
+
