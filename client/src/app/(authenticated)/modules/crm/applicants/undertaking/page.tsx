@@ -165,7 +165,7 @@ export default function UndertakingPage() {
         const fullName = `${appData?.firstName ?? ""} ${appData?.lastName ?? ""}`.trim();
         setSampleData({
           nameOfTheStudent: fullName,
-          applicationId: appData?.applicationNumber ?? appId,
+          applicationId: appData?.applicationNumber ?? appId ?? "",
           programEnrolling: appData?.program?.programName ?? "",
           admissionNo: appData?.admissionNumber ?? "",
         });
@@ -179,7 +179,7 @@ export default function UndertakingPage() {
 
         const templateRes = await fetch(
           `${API_BASE}/api/undertaking-templates/by-program?institutionId=${encodeURIComponent(
-            institutionId
+            institutionId ?? ""
           )}&programId=${encodeURIComponent(programId)}`,
           { credentials: "include" }
         );
