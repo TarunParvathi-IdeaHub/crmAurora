@@ -138,8 +138,8 @@ type DocumentKey = keyof UploadedDocuments;
 
 const DOCUMENT_LABELS: Record<DocumentKey, string> = {
   aadharCard: "Aadhaar Card",
-  photo: "Photograph",
-  signature: "Signature",
+  passportPhoto: "Photograph",
+  studentSignature: "Signature",
   sscMemo: "SSC / 10th Memo",
   intermediateMemo: "Intermediate / 12th Memo",
   ugMemo: "UG Degree Certificate",
@@ -151,8 +151,8 @@ const DOCUMENT_LABELS: Record<DocumentKey, string> = {
 
 const DOCUMENT_KEYS: DocumentKey[] = [
   "aadharCard",
-  "photo",
-  "signature",
+  "passportPhoto",
+  "studentSignature",
   "sscMemo",
   "intermediateMemo",
   "ugMemo",
@@ -164,8 +164,8 @@ const DOCUMENT_KEYS: DocumentKey[] = [
 
 const EMPTY_DOCUMENTS: UploadedDocuments = {
   aadharCard: null,
-  photo: null,
-  signature: null,
+  passportPhoto: null,
+  studentSignature: null,
   sscMemo: null,
   intermediateMemo: null,
   ugMemo: null,
@@ -509,8 +509,8 @@ export default function ReviewApplicants({
     const setDocs = (documents: ApplicationDetail["documents"]) => {
       setEditDocuments({
         aadharCard: buildDocumentFile(documents.aadharCard, DOCUMENT_LABELS.aadharCard),
-        photo: buildDocumentFile(documents.photo, DOCUMENT_LABELS.photo),
-        signature: buildDocumentFile(documents.signature, DOCUMENT_LABELS.signature),
+        passportPhoto: buildDocumentFile(documents.passportPhoto, DOCUMENT_LABELS.passportPhoto),
+        studentSignature: buildDocumentFile(documents.studentSignature, DOCUMENT_LABELS.studentSignature),
         sscMemo: buildDocumentFile(documents.sscMemo, DOCUMENT_LABELS.sscMemo),
         intermediateMemo: buildDocumentFile(documents.intermediateMemo, DOCUMENT_LABELS.intermediateMemo),
         ugMemo: buildDocumentFile(documents.ugMemo, DOCUMENT_LABELS.ugMemo),
