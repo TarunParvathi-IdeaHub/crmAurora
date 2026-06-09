@@ -9,7 +9,7 @@ const normalizeString = (value: unknown): string =>
   typeof value === 'string' ? value.trim() : '';
 
 const NAME_RE = /^[A-Za-z\s]+$/;
-const GMAIL_RE = /^[^\s@]+@gmail\.com$/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const MOBILE_RE = /^[6-9]\d{9}$/;
 
 const getEnquiryFormPayload = (body: Record<string, unknown>) => ({
@@ -38,7 +38,7 @@ const validateCreatePayload = (payload: ReturnType<typeof getEnquiryFormPayload>
   if (!NAME_RE.test(payload.firstName)) return 'First name should contain only letters and spaces.';
   if (!NAME_RE.test(payload.lastName)) return 'Last name should contain only letters and spaces.';
   if (!MOBILE_RE.test(payload.mobileNo)) return 'Mobile number must be a 10-digit number starting with 6-9.';
-  if (!GMAIL_RE.test(payload.email)) return 'Email must be a valid Gmail address.';
+  if (!EMAIL_RE.test(payload.email)) return 'Email must be a valid Gmail address.';
   return null;
 };
 
@@ -208,7 +208,7 @@ export const createEnquiryForm = async (
       res.status(400).json({ error: 'Mobile number must be a 10-digit number starting with 6-9.' });
       return;
     }
-    if (!GMAIL_RE.test(email)) {
+    if (!EMAIL_RE.test(email)) {
       res.status(400).json({ error: 'Email must be a valid Gmail address.' });
       return;
     }
