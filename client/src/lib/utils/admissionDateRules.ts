@@ -114,14 +114,16 @@ function toYear(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function getSSCYears(studyLevel: string, currentYear: number = getIndianCurrentYear()): string[] {
+export function getSSCYears(studyLevel: string, dateOfBirth: string, currentYear: number = getIndianCurrentYear()): string[] {
   const level = normalizeStudyLevel(studyLevel);
+  const dobYear = Number(dateOfBirth?.split("-")[0]);
+  const minSSCYear = Number.isFinite(dobYear) ? dobYear + 13 : DEFAULT_PAST_YEAR_LIMIT;
 
-  if (level === "UG") return buildDescendingYears(currentYear - 2);
-  if (level === "PG") return buildDescendingYears(currentYear - 5);
-  if (level === "PhD") return buildDescendingYears(currentYear - 7);
+  if (level === "UG") return buildDescendingYears(currentYear - 2, minSSCYear);
+  if (level === "PG") return buildDescendingYears(currentYear - 5, minSSCYear);
+  if (level === "PhD") return buildDescendingYears(currentYear - 7, minSSCYear);
 
-  return buildDescendingYears(currentYear - 2);
+  return buildDescendingYears(currentYear - 2, minSSCYear);
 }
 
 export function getIntermediateYears(

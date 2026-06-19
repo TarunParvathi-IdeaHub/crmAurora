@@ -9,6 +9,10 @@ import { useAuth } from "@/lib/hooks/useAuth";
 import { authFetch } from "@/lib/utils/authFetch";
 import { useProfile, type DashboardProfile } from "@/providers/ProfileProvider";
 import { roleModulesMap, type DashboardModule } from "@/lib/config/dashboardModules";
+import {
+  getApplicationStatusLabel,
+  isApplicationEditable,
+} from "@/lib/utils/applicationStatus";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -115,9 +119,10 @@ export default function DashboardPage() {
   const { profile, setProfile, isProfileLoading, setIsProfileLoading } = useProfile();
   const [schools, setSchools] = useState<School[]>([]);
   const [loadingSchools, setLoadingSchools] = useState(true);
+  const [myApplicationStatus, setMyApplicationStatus] = useState<string | null>(null);
 
   const displayName =
-    profile?.fullName ?? user?.userId ?? user?.email?.split("@")[0] ?? "User";
+    profile?.fullName ?? user?.fullName ?? user?.userId ?? user?.email?.split("@")[0] ?? "User";
   const displayRole = profile?.role ?? user?.rawRole ?? "System Administrator";
   const displayEmail = profile?.email ?? user?.email ?? "—";
   const displayInstitution =
@@ -188,6 +193,35 @@ export default function DashboardPage() {
     fetch_();
   }, []);
 
+  useEffect(() => {
+    if (!isApplicant || !profile?.applicationId) return;
+
+    let cancelled = false;
+
+    const fetchStatus = async () => {
+      try {
+        const resp = await authFetch(`${API_BASE_URL}/api/student-application/get/${profile.applicationId}`);
+        if (!resp.ok) return;
+        const json = (await resp.json()) as {
+          data?: {
+            applicationStatus?: string;
+          };
+        };
+        if (!cancelled) {
+          setMyApplicationStatus(json.data?.applicationStatus ?? null);
+        }
+      } catch {
+        if (!cancelled) setMyApplicationStatus(null);
+      }
+    };
+
+    fetchStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isApplicant, profile?.applicationId]);
+
   return (
     <motion.div
       initial="hidden"
@@ -214,7 +248,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-sm font-medium text-white/70">{greeting},</p>
                 <h1 className="text-2xl font-bold tracking-tight">
-                  {isProfileLoading ? (user?.userId ?? "…") : displayName}
+                  {isProfileLoading ? "Loading..." : displayName}
                 </h1>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <Badge label={displayRole} variant="ghost" dot />
@@ -271,6 +305,14 @@ export default function DashboardPage() {
               const ds = domainStyle[(module as DashboardModule & { domain?: string }).domain ?? "management"] ??
                          domainStyle.management;
               const DomainIcon = ds.icon;
+              const isMyApplicationModule = module.id === "my-application";
+              const isMyApplicationEditable = isApplicationEditable(myApplicationStatus);
+              const moduleDescription =
+                isMyApplicationModule && myApplicationStatus
+                  ? isMyApplicationEditable
+                    ? module.description
+                    : "View your application status and current admission stage."
+                  : module.description;
               return (
                 <motion.div key={module.id} variants={fadeUp}>
                   <Link href={module.path} className="block">
@@ -285,7 +327,13 @@ export default function DashboardPage() {
                         />
                       </div>
                       <h3 className="mt-4 text-[15px] font-semibold text-slate-900">{module.title}</h3>
-                      <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{module.description}</p>
+                      <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{moduleDescription}</p>
+                      {isMyApplicationModule && myApplicationStatus && !isMyApplicationEditable && (
+                        <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                          <span className="h-2 w-2 rounded-full bg-blue-500" />
+                          {getApplicationStatusLabel(myApplicationStatus)}
+                        </div>
+                      )}
                     </Card>
                   </Link>
                 </motion.div>

@@ -193,8 +193,6 @@ type UploadDocumentsStepProps = {
   onChange: (updates: Partial<UploadedDocuments>) => void;
   /** levelName from backend, e.g. "Under Graduate (UG)" */
   degreeLevel?: string;
-  hasGap?: boolean;
-  onGapToggle?: (val: boolean) => void;
 };
 
 export default function UploadDocumentsStep({
@@ -202,8 +200,6 @@ export default function UploadDocumentsStep({
   errors,
   onChange,
   degreeLevel = "",
-  hasGap = false,
-  onGapToggle,
 }: UploadDocumentsStepProps) {
   const handleWidgetChange = useCallback(
     (key: DocKey, doc: DocumentFile) => {
@@ -218,12 +214,36 @@ export default function UploadDocumentsStep({
 
   // Build visible doc list based on degree level
   const visibleDocs: DocConfig[] = [
-    { key: "passportPhoto",       label: "Passport Photo",            required: true,  hint: "JPEG, JPG, PNG formats only, max 5 MB. Upload a clear passport-size photo." },
-    { key: "studentSignature",    label: "Student Signature",         required: true,  hint: "JPEG, JPG, PNG formats only, max 5 MB. Upload your signature on a white background." },
-    { key: "gapCertificate",      label: "Gap Certificate",           required: false, hint: "PDF only, max 5 MB. Upload if you had an academic gap year." },
-    { key: "bonafideCertificate", label: "Bonafide Certificate",      required: true,  hint: "PDF only, max 5 MB. Mandatory for all applicants." },
-    { key: "transferCertificate", label: "Transfer Certificate",      required: true,  hint: "PDF only, max 5 MB. Mandatory for all applicants." },
+    { key: "aadharCard",          label: "Aadhaar Card",             required: true,  hint: "PDF only, max 5 MB. Upload a clear scanned copy of your Aadhaar card." },
+    { key: "passportPhoto",       label: "Passport Photo",          required: true,  hint: "JPEG, JPG, PNG formats only, max 5 MB. Upload a clear passport-size photo." },
+    { key: "studentSignature",    label: "Student Signature",       required: true,  hint: "JPEG, JPG, PNG formats only, max 5 MB. Upload your signature on a white background." },
+    { key: "sscMemo",             label: "SSC / 10th Memo",         required: true,  hint: "PDF only, max 5 MB. Upload your SSC / 10th marksheet or memo." },
+    { key: "intermediateMemo",    label: "Intermediate / 12th Memo", required: true,  hint: "PDF only, max 5 MB. Upload your Intermediate / 12th marksheet or memo." },
   ];
+
+  if (isPG || isPhd) {
+    visibleDocs.push({
+      key: "ugMemo",
+      label: "UG Degree Certificate",
+      required: true,
+      hint: "PDF only, max 5 MB. Upload your UG degree certificate.",
+    });
+  }
+
+  if (isPhd) {
+    visibleDocs.push({
+      key: "pgMemo",
+      label: "PG Degree Certificate",
+      required: true,
+      hint: "PDF only, max 5 MB. Upload your PG degree certificate.",
+    });
+  }
+
+  visibleDocs.push(
+    { key: "gapCertificate",      label: "Gap Certificate",          required: false, hint: "PDF only, max 5 MB. Upload a gap certificate if you have a gap year." },
+    { key: "bonafideCertificate", label: "Bonafide Certificate",     required: true,  hint: "PDF only, max 5 MB. Mandatory for all applicants." },
+    { key: "transferCertificate", label: "Transfer Certificate",     required: true,  hint: "PDF only, max 5 MB. Mandatory for all applicants." }
+  );
 
   return (
     <div className="space-y-6">

@@ -50,10 +50,10 @@ export default function StepActions({
           <button
             type="button"
             onClick={onNext}
-            disabled={isSaving || hasErrors}
+            disabled={isSaving}
             title={hasErrors ? "❌ Please fix all errors before proceeding to next step" : ""}
             className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-white transition ${
-              isSaving || hasErrors
+              isSaving
                 ? "cursor-not-allowed bg-slate-400 opacity-60"
                 : "bg-blue-600 hover:bg-blue-700"
             }`}

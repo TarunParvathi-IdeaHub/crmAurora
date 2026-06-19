@@ -92,14 +92,18 @@ export default function ApplicationPreview({
           <InfoRow label="Blood Group" value={b.bloodGroup} />
           <InfoRow label="Caste" value={b.caste} />
           <InfoRow label="Sub-Caste" value={b.subCaste} />
-          <InfoRow
+              <InfoRow
             label="Address"
             value={[b.presentAddress, b.city, b.state, b.pincode]
               .filter(Boolean)
               .join(", ")}
           />
-          <InfoRow label="Father" value={[b.fatherName, b.fatherMobileNo].filter(Boolean).join(" · ")} />
-          <InfoRow label="Mother" value={[b.motherName, b.motherMobileNo].filter(Boolean).join(" · ")} />
+          <InfoRow label="Father Name" value={b.fatherName} />
+          <InfoRow label="Father Mobile" value={b.fatherMobileNo} />
+          <InfoRow label="Father Email" value={b.fatherEmail} />
+          <InfoRow label="Mother Name" value={b.motherName} />
+          <InfoRow label="Mother Mobile" value={b.motherMobileNo} />
+          <InfoRow label="Mother Email" value={b.motherEmail} />
         </div>
       </SectionCard>
 
@@ -171,16 +175,35 @@ export default function ApplicationPreview({
 
       {/* Documents */}
       <SectionCard title="Documents" onEdit={() => onEditStep(3)}>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <DocBadge doc={d.aadharCard} label="Aadhaar Card" />
-          <DocBadge doc={d.sscMemo} label="SSC / 10th Memo" />
-          <DocBadge doc={d.intermediateMemo} label="Intermediate Memo" />
-          <DocBadge doc={d.ugMemo} label="UG Degree Certificate" />
-          <DocBadge doc={d.pgMemo} label="PG Degree Certificate" />
-          <DocBadge doc={d.gapCertificate} label="Gap Certificate" />
-          <DocBadge doc={d.bonafideCertificate} label="Bonafide Certificate" />
-          <DocBadge doc={d.transferCertificate} label="Transfer Certificate" />
-        </div>
+        {[
+          { doc: d.aadharCard, label: "Aadhaar Card" },
+          { doc: d.sscMemo, label: "SSC / 10th Memo" },
+          { doc: d.intermediateMemo, label: "Intermediate Memo" },
+          { doc: d.ugMemo, label: "UG Degree Certificate" },
+          { doc: d.pgMemo, label: "PG Degree Certificate" },
+          { doc: d.gapCertificate, label: "Gap Certificate" },
+          { doc: d.bonafideCertificate, label: "Bonafide Certificate" },
+          { doc: d.transferCertificate, label: "Transfer Certificate" },
+        ]
+          .filter((item) => item.doc)
+          .map((item) => (
+            <DocBadge key={item.label} doc={item.doc!} label={item.label} />
+          ))
+        }
+        {[
+          d.aadharCard,
+          d.sscMemo,
+          d.intermediateMemo,
+          d.ugMemo,
+          d.pgMemo,
+          d.gapCertificate,
+          d.bonafideCertificate,
+          d.transferCertificate,
+        ].every((doc) => !doc) && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+            No documents have been uploaded yet.
+          </div>
+        )}
       </SectionCard>
     </div>
   );

@@ -11,14 +11,41 @@ import {
 
 import type { ApplicationStatus } from "@/types/applicant";
 
-const statusConfig: Record<
+const statusConfig: Partial<Record<
   ApplicationStatus,
   {
     label: string;
     className: string;
     dotClass: string;
   }
-> = {
+>> = {
+  SAVED_AS_DRAFT: {
+    label: "Saved As Draft",
+    className:
+      "border-amber-200 bg-amber-50 text-amber-700 ring-amber-100",
+    dotClass: "bg-amber-500",
+  },
+
+  APPLICATION_FEE_DUE: {
+    label: "Application Fee Due",
+    className:
+      "border-orange-200 bg-orange-50 text-orange-700 ring-orange-100",
+    dotClass: "bg-orange-500",
+  },
+
+  APPLICATION_FEE_PAID: {
+    label: "Application Fee Paid",
+    className: "border-blue-200 bg-blue-50 text-blue-700 ring-blue-100",
+    dotClass: "bg-blue-500",
+  },
+
+  APPLICATION_SUBMITTED: {
+    label: "Application Submitted",
+    className:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 ring-emerald-100",
+    dotClass: "bg-emerald-500",
+  },
+
   DRAFT: {
     label: "Draft",
     className:
@@ -83,7 +110,11 @@ export default function ApplicationHeader({
   programName,
   admissionCycle,
 }: ApplicationHeaderProps) {
-  const status = statusConfig[applicationStatus];
+  const status = statusConfig[applicationStatus] ?? {
+    label: applicationStatus.replace(/_/g, " "),
+    className: "border-slate-200 bg-slate-50 text-slate-700 ring-slate-100",
+    dotClass: "bg-slate-400",
+  };
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Users,
   Search,
@@ -18,17 +18,38 @@ import {
   FileText,
   GraduationCap,
   Phone,
-  Mail,
   User,
   CheckCircle2,
   Clock,
   XCircle,
   BookOpen,
+  BadgeIndianRupee,
+  ThumbsUp,
+  ThumbsDown,
+  Lock,
 } from "lucide-react";
 import { useProfile } from "@/providers/ProfileProvider";
 import { useRole } from "@/lib/hooks/useRole";
 import UploadDocumentsStep from "@/components/applicant/application/steps/UploadDocumentsStep";
 import type { DocumentFile, UploadedDocuments } from "@/types/applicant";
+import FeeConcessionDialog from "@/components/applicant/application/FeeConcessionDialog";
+import {
+  canManageFeeConcession,
+  canUseFeeConcession,
+  canVerifyDocuments,
+} from "@/lib/utils/feeConcession";
+import {
+  admitApplicant,
+  rejectApplicant,
+  fetchAdmitDialogData,
+  type AdmitDialogData,
+} from "@/lib/api/admission";
+
+// ── Finalization guard ────────────────────────────────────────────────────────
+
+function isFinalized(status: ApplicationStatus): boolean {
+  return status === "ADMISSION_GRANTED" || status === "ADMISSION_REJECTED";
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -133,6 +154,74 @@ type EducationDetail = {
   pgInstitutionName: string | null;
   pgPercentage: number | null;
 };
+
+type PaymentInfo = {
+  paymentStatus: string | null;
+  invoiceNumber: string | null;
+  receiptNumber: string | null;
+  amount: number | null;
+  amountPaid: number | null;
+  amountDue: number | null;
+  paidAt: string | null;
+};
+
+function createEmptyEducationDetail(): EducationDetail {
+  return {
+    id: "",
+    sscBoard: null,
+    sscYearOfPassing: null,
+    sscHallTicketNo: null,
+    sscInstitutionName: null,
+    sscPercentage: null,
+    intermediateBoard: null,
+    intermediateYearOfPassing: null,
+    intermediateHallTicketNo: null,
+    intermediateInstitutionName: null,
+    intermediatePercentage: null,
+    ugBoard: null,
+    ugYearOfPassing: null,
+    ugHallTicketNo: null,
+    ugInstitutionName: null,
+    ugPercentage: null,
+    pgBoard: null,
+    pgYearOfPassing: null,
+    pgHallTicketNo: null,
+    pgInstitutionName: null,
+    pgPercentage: null,
+  };
+}
+
+function formatCurrency(value: number | null | undefined) {
+  if (value == null) return "—";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function dlIsPG(dl: string): boolean {
+  const n = dl.toLowerCase();
+  return n.includes("post graduate") || n.includes("post graduation") || n.includes("pg");
+}
+
+function dlIsPhd(dl: string): boolean {
+  const n = dl.toLowerCase();
+  return n.includes("doctor of philosophy") || n.includes("phd");
+}
+
+async function fetchPaymentInfo(applicationId: string): Promise<PaymentInfo | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/application-fee/status/${applicationId}`, {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as PaymentInfo;
+    return json;
+  } catch {
+    return null;
+  }
+}
 
 type DocumentKey = keyof UploadedDocuments;
 
@@ -374,12 +463,16 @@ export default function ReviewApplicants({
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("search") ?? "";
+  });
   const [currentPage, setCurrentPage] = useState(1);
 
   // Detail panel
   const [viewApp, setViewApp] = useState<Application | null>(null);
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
+  const [detailPaymentInfo, setDetailPaymentInfo] = useState<PaymentInfo | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
 
@@ -389,9 +482,46 @@ export default function ReviewApplicants({
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
   const [editDetail, setEditDetail] = useState<ApplicationDetail | null>(null);
+  const [editPaymentInfo, setEditPaymentInfo] = useState<PaymentInfo | null>(null);
   const [editDocuments, setEditDocuments] = useState<UploadedDocuments>(EMPTY_DOCUMENTS);
   const [editDetailLoading, setEditDetailLoading] = useState(false);
   const [editDetailError, setEditDetailError] = useState("");
+  const [feeConcessionApplicationId, setFeeConcessionApplicationId] = useState<string | null>(null);
+
+  // Admit dialog
+  const [admitDialogApp, setAdmitDialogApp] = useState<Application | null>(null);
+  const [admitDialogData, setAdmitDialogData] = useState<AdmitDialogData | null>(null);
+  const [admitDialogLoading, setAdmitDialogLoading] = useState(false);
+  const [admitDialogError, setAdmitDialogError] = useState("");
+  const [admitSaving, setAdmitSaving] = useState(false);
+  const [admitError, setAdmitError] = useState("");
+
+  // Reject dialog
+  const [rejectDialogApp, setRejectDialogApp] = useState<Application | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectSaving, setRejectSaving] = useState(false);
+  const [rejectError, setRejectError] = useState("");
+
+  const updateEditEducation = useCallback((field: keyof EducationDetail, value: string) => {
+    setEditDetail((prev) => {
+      if (!prev) return prev;
+      const existing = prev.studentEducationDetails?.[0] ?? createEmptyEducationDetail();
+      const normalized = {
+        ...existing,
+        [field]:
+          field.endsWith("YearOfPassing")
+            ? value.trim() === ""
+              ? null
+              : Number(value)
+            : field.endsWith("Percentage")
+            ? value.trim() === ""
+              ? null
+              : Number(value)
+            : value.trim() || null,
+      } as EducationDetail;
+      return { ...prev, studentEducationDetails: [{ ...normalized, id: normalized.id || existing.id }] };
+    });
+  }, []);
 
   const handleDocumentChange = useCallback((updates: Partial<UploadedDocuments>) => {
     setEditDocuments((prev) => ({ ...prev, ...updates }));
@@ -403,29 +533,10 @@ export default function ReviewApplicants({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // If a `search` query param is provided (from Leads panel), prefill search and
-  // auto-open the application when it appears in the list.
-  useEffect(() => {
-    const s = searchParams?.get("search") ?? "";
-    if (s) setSearchQuery(s);
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (!searchQuery || applications.length === 0) return;
-    const q = searchQuery.toLowerCase().trim();
-    const match = applications.find((a) =>
-      (a.email ?? "").toLowerCase().includes(q) || (a.mobileNo ?? "").includes(q) || `${a.firstName} ${a.lastName}`.toLowerCase().includes(q)
-    );
-    if (match) {
-      // open edit for the matching application
-      openEdit(match);
-    }
-  }, [applications, searchQuery]);
 
   const isDirectorOrIncharge =
     role === "admissionDirector" || role === "admissionIncharge";
+  const canOpenFeeConcession = canUseFeeConcession(role);
   const canEditDocuments =
     role !== "admissionCounsellor" && role !== "admissionConsultant";
 
@@ -433,7 +544,7 @@ export default function ReviewApplicants({
 
   // ── Fetch applications ─────────────────────────────────────────────────────
 
-  useEffect(() => {
+  const fetchApplications = useCallback(() => {
     if (!profile || !role) return;
 
     const institutionId = profile.institution?.id;
@@ -467,7 +578,13 @@ export default function ReviewApplicants({
       })
       .catch(() => setError("Failed to connect to server."))
       .finally(() => setLoading(false));
-  }, [profile, role, filter]);
+  }, [filter, profile, role]);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      fetchApplications();
+    });
+  }, [fetchApplications]);
 
   // ── Open detail panel ──────────────────────────────────────────────────────
 
@@ -482,11 +599,13 @@ export default function ReviewApplicants({
 
     fetch(url, { credentials: "include" })
       .then((r) => r.json() as Promise<{ data?: ApplicationDetail; error?: string }>)
-      .then((res) => {
+      .then(async (res) => {
         if (res.error) {
           setDetailError(res.error);
         } else if (res.data) {
           setDetail(res.data);
+          const paymentInfo = await fetchPaymentInfo(app.id);
+          setDetailPaymentInfo(paymentInfo);
         } else {
           setDetailError("Failed to load application details.");
         }
@@ -497,7 +616,7 @@ export default function ReviewApplicants({
 
   // ── Edit application ────────────────────────────────────────────────────────
 
-  function openEdit(app: Application) {
+  const openEdit = useCallback((app: Application) => {
     setEditApp(app);
     setEditStatus(app.applicationStatus);
     setEditError("");
@@ -530,18 +649,117 @@ export default function ReviewApplicants({
 
     fetch(`${API_BASE}/api/student-application/get/${app.id}`, { credentials: "include" })
       .then((r) => r.json() as Promise<{ data?: ApplicationDetail; error?: string }>)
-      .then((res) => {
+      .then(async (res) => {
         if (res.error) {
           setEditDetailError(res.error);
         } else if (res.data) {
           setEditDetail(res.data);
           setDocs(res.data.documents);
+          const paymentInfo = await fetchPaymentInfo(app.id);
+          setEditPaymentInfo(paymentInfo);
         } else {
           setEditDetailError("Failed to load application details.");
         }
       })
       .catch(() => setEditDetailError("Failed to load application details."))
       .finally(() => setEditDetailLoading(false));
+  }, [detail]);
+
+  useEffect(() => {
+    if (!searchQuery || applications.length === 0) return;
+    const q = searchQuery.toLowerCase().trim();
+    const match = applications.find((a) =>
+      (a.email ?? "").toLowerCase().includes(q) ||
+      (a.mobileNo ?? "").includes(q) ||
+      `${a.firstName} ${a.lastName}`.toLowerCase().includes(q)
+    );
+    if (match) {
+      // Open edit for the matching application when search is prefilled.
+      queueMicrotask(() => {
+        openEdit(match);
+      });
+    }
+  }, [applications, openEdit, searchQuery]);
+
+  function openFeeConcession(app: Application) {
+    if (!canManageFeeConcession(app.applicationStatus)) return;
+    setFeeConcessionApplicationId(app.id);
+    setOpenMenuId(null);
+  }
+
+  function openDocumentVerification(app: Application) {
+    if (!canVerifyDocuments(app.applicationStatus)) return;
+    setOpenMenuId(null);
+    router.push(`/modules/crm/admissions/document-verification/${app.id}`);
+  }
+
+  function openAdmitDialog(app: Application) {
+    if (isFinalized(app.applicationStatus)) return;
+    setOpenMenuId(null);
+    setAdmitDialogApp(app);
+    setAdmitDialogData(null);
+    setAdmitDialogError("");
+    setAdmitError("");
+    setAdmitDialogLoading(true);
+
+    fetchAdmitDialogData(app.id)
+      .then(({ data, error }) => {
+        if (error) setAdmitDialogError(error);
+        else if (data) setAdmitDialogData(data);
+      })
+      .catch(() => setAdmitDialogError("Failed to load admit data."))
+      .finally(() => setAdmitDialogLoading(false));
+  }
+
+  function openRejectDialog(app: Application) {
+    if (isFinalized(app.applicationStatus)) return;
+    setOpenMenuId(null);
+    setRejectDialogApp(app);
+    setRejectReason("");
+    setRejectError("");
+  }
+
+  async function handleAdmit() {
+    if (!admitDialogApp || admitSaving) return;
+    setAdmitSaving(true);
+    setAdmitError("");
+
+    const { error, applicationStatus } = await admitApplicant(admitDialogApp.id);
+    setAdmitSaving(false);
+
+    if (error) {
+      setAdmitError(error);
+      return;
+    }
+
+    // Update list + close dialog
+    const newStatus = (applicationStatus ?? "ADMISSION_GRANTED") as ApplicationStatus;
+    setApplications((prev) =>
+      prev.map((a) => (a.id === admitDialogApp.id ? { ...a, applicationStatus: newStatus } : a))
+    );
+    setAdmitDialogApp(null);
+    setAdmitDialogData(null);
+  }
+
+  async function handleReject() {
+    if (!rejectDialogApp || rejectSaving || !rejectReason.trim()) return;
+    setRejectSaving(true);
+    setRejectError("");
+
+    const { error, applicationStatus } = await rejectApplicant(rejectDialogApp.id, rejectReason.trim());
+    setRejectSaving(false);
+
+    if (error) {
+      setRejectError(error);
+      return;
+    }
+
+    const newStatus = (applicationStatus ?? "ADMISSION_REJECTED") as ApplicationStatus;
+    setApplications((prev) =>
+      prev.map((a) => (a.id === rejectDialogApp.id ? { ...a, applicationStatus: newStatus } : a))
+    );
+    setRejectDialogApp(null);
+    setRejectReason("");
   }
 
   function updateEditDetail(field: keyof ApplicationDetail, value: string | boolean | null) {
@@ -580,6 +798,31 @@ export default function ReviewApplicants({
     formData.append("entranceExamRank", editDetail.entranceExamRank ?? "");
     formData.append("intrestedInAurumExam", String(editDetail.intrestedInAurumExam));
 
+    // Education details
+    const education = editDetail.studentEducationDetails?.[0];
+    if (education) {
+      formData.append("sscBoard", education.sscBoard ?? "");
+      formData.append("sscInstitutionName", education.sscInstitutionName ?? "");
+      formData.append("sscHallTicketNo", education.sscHallTicketNo ?? "");
+      formData.append("sscYearOfPassing", education.sscYearOfPassing?.toString() ?? "");
+      formData.append("sscPercentage", education.sscPercentage?.toString() ?? "");
+      formData.append("intermediateBoard", education.intermediateBoard ?? "");
+      formData.append("intermediateInstitutionName", education.intermediateInstitutionName ?? "");
+      formData.append("intermediateHallTicketNo", education.intermediateHallTicketNo ?? "");
+      formData.append("intermediateYearOfPassing", education.intermediateYearOfPassing?.toString() ?? "");
+      formData.append("intermediatePercentage", education.intermediatePercentage?.toString() ?? "");
+      formData.append("ugBoard", education.ugBoard ?? "");
+      formData.append("ugInstitutionName", education.ugInstitutionName ?? "");
+      formData.append("ugHallTicketNo", education.ugHallTicketNo ?? "");
+      formData.append("ugYearOfPassing", education.ugYearOfPassing?.toString() ?? "");
+      formData.append("ugPercentage", education.ugPercentage?.toString() ?? "");
+      formData.append("pgBoard", education.pgBoard ?? "");
+      formData.append("pgInstitutionName", education.pgInstitutionName ?? "");
+      formData.append("pgHallTicketNo", education.pgHallTicketNo ?? "");
+      formData.append("pgYearOfPassing", education.pgYearOfPassing?.toString() ?? "");
+      formData.append("pgPercentage", education.pgPercentage?.toString() ?? "");
+    }
+
     for (const key of DOCUMENT_KEYS) {
       const doc = editDocuments[key];
       if (doc?.file) {
@@ -587,7 +830,11 @@ export default function ReviewApplicants({
       }
     }
 
-    fetch(`${API_BASE}/api/applications/${entityId}/${editApp.id}`, {
+    const updateUrl = isDirectorOrIncharge
+      ? `${API_BASE}/api/applications/director/${editApp.id}`
+      : `${API_BASE}/api/applications/${entityId}/${editApp.id}`;
+
+    fetch(updateUrl, {
       method: "PUT",
       credentials: "include",
       body: formData,
@@ -789,12 +1036,17 @@ export default function ReviewApplicants({
                           <Eye size={15} />
                         </button>
 
-                        {/* Edit */}
+                        {/* Edit — locked when finalized */}
                         <button
                           type="button"
-                          title="Edit application"
-                          onClick={() => openEdit(app)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition hover:bg-amber-50 hover:text-amber-600"
+                          title={isFinalized(app.applicationStatus) ? "Cannot edit a finalized application" : "Edit application"}
+                          onClick={() => !isFinalized(app.applicationStatus) && openEdit(app)}
+                          disabled={isFinalized(app.applicationStatus)}
+                          className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition ${
+                            isFinalized(app.applicationStatus)
+                              ? "cursor-not-allowed text-slate-200"
+                              : "text-slate-400 hover:bg-amber-50 hover:text-amber-600"
+                          }`}
                         >
                           <Pencil size={14} />
                         </button>
@@ -832,23 +1084,63 @@ export default function ReviewApplicants({
                                   ),
                                   top: menuPos.y + menuPos.h + 4,
                                 }}
-                                className="z-50 w-48 rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                                className="z-50 w-52 rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
                               >
-                                {isDirectorOrIncharge && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      router.push(
-                                        `/modules/crm/admissions/document-verification/${app.id}`,
-                                      );
-                                    }}
-                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-50"
-                                  >
-                                    <ShieldCheck size={14} className="text-emerald-500" />
-                                    Document Verification
-                                  </button>
-                                )}
+                                 {(() => {
+                                   const appFinalized = isFinalized(app.applicationStatus);
+                                   const canVerifyDocumentsForApp = !appFinalized && canVerifyDocuments(app.applicationStatus);
+                                   const canManageFeeConcessionForApp = !appFinalized && canManageFeeConcession(app.applicationStatus);
+
+                                   return (
+                                     <>
+                                       {isDirectorOrIncharge && (
+                                         <button
+                                           type="button"
+                                           disabled={!canVerifyDocumentsForApp}
+                                           onClick={() => openDocumentVerification(app)}
+                                           className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${canVerifyDocumentsForApp ? "text-slate-700 hover:bg-slate-50" : "cursor-not-allowed text-slate-300"}`}
+                                         >
+                                           <ShieldCheck size={14} className={canVerifyDocumentsForApp ? "text-emerald-500" : "text-slate-300"} />
+                                           Document Verification
+                                         </button>
+                                       )}
+                                       {canOpenFeeConcession && (
+                                         <button
+                                           type="button"
+                                           disabled={!canManageFeeConcessionForApp}
+                                           onClick={() => openFeeConcession(app)}
+                                           className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${canManageFeeConcessionForApp ? "text-slate-700 hover:bg-slate-50" : "cursor-not-allowed text-slate-300"}`}
+                                         >
+                                           <BadgeIndianRupee size={14} className={canManageFeeConcessionForApp ? "text-blue-500" : "text-slate-300"} />
+                                           Fee Concession
+                                         </button>
+                                       )}
+                                       {isDirectorOrIncharge && <div className="my-1 border-t border-slate-100" />}
+                                       {isDirectorOrIncharge && (
+                                         <button
+                                           type="button"
+                                           disabled={appFinalized}
+                                           onClick={() => openAdmitDialog(app)}
+                                           className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${appFinalized ? "cursor-not-allowed text-slate-300" : "text-emerald-700 hover:bg-emerald-50"}`}
+                                         >
+                                           {appFinalized ? <Lock size={14} className="text-slate-300" /> : <ThumbsUp size={14} className="text-emerald-500" />}
+                                           {app.applicationStatus === "ADMISSION_GRANTED" ? "Admitted ✓" : "Admit Applicant"}
+                                         </button>
+                                       )}
+                                       {isDirectorOrIncharge && (
+                                         <button
+                                           type="button"
+                                           disabled={appFinalized}
+                                           onClick={() => openRejectDialog(app)}
+                                           className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${appFinalized ? "cursor-not-allowed text-slate-300" : "text-rose-700 hover:bg-rose-50"}`}
+                                         >
+                                           {appFinalized ? <Lock size={14} className="text-slate-300" /> : <ThumbsDown size={14} className="text-rose-500" />}
+                                           {app.applicationStatus === "ADMISSION_REJECTED" ? "Rejected ✓" : "Reject Application"}
+                                         </button>
+                                       )}
+                                     </>
+                                   );
+                                 })()}
                               </div>
                             </>
                           )}
@@ -917,8 +1209,8 @@ export default function ReviewApplicants({
 
       {/* ── Application Detail Panel ────────────────────────────────────────── */}
       {viewApp && (
-        <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/30 backdrop-blur-sm">
-          <div className="flex h-full w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/30 backdrop-blur-sm overflow-y-auto">
+          <div className="relative flex h-auto w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl">
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
               <div className="flex items-center gap-3">
@@ -947,8 +1239,8 @@ export default function ReviewApplicants({
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-              {detailLoading ? (
+            <div className="px-6 py-5">
+                      {detailLoading ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 size={24} className="animate-spin text-slate-400" />
                 </div>
@@ -958,7 +1250,22 @@ export default function ReviewApplicants({
                   {detailError}
                 </div>
               ) : detail ? (
-                <ApplicationDetailContent detail={detail} />
+                <>
+                  <ApplicationDetailContent detail={detail} />
+                  {detailPaymentInfo && (
+                    <Section icon={<FileText size={15} />} title="Payment Details">
+                      <div className="grid grid-cols-2 gap-3">
+                        <InfoRow label="Payment Status" value={detailPaymentInfo.paymentStatus ?? "—"} />
+                        <InfoRow label="Invoice Number" value={detailPaymentInfo.invoiceNumber} />
+                        <InfoRow label="Receipt Number" value={detailPaymentInfo.receiptNumber} />
+                        <InfoRow label="Amount" value={formatCurrency(detailPaymentInfo.amount)} />
+                        <InfoRow label="Amount Paid" value={formatCurrency(detailPaymentInfo.amountPaid)} />
+                        <InfoRow label="Amount Due" value={formatCurrency(detailPaymentInfo.amountDue)} />
+                        <InfoRow label="Paid At" value={detailPaymentInfo.paidAt ? new Date(detailPaymentInfo.paidAt).toLocaleString("en-IN") : null} />
+                      </div>
+                    </Section>
+                  )}
+                </>
               ) : null}
             </div>
           </div>
@@ -967,8 +1274,8 @@ export default function ReviewApplicants({
 
       {/* ── Edit Application Panel ─────────────────────────────────────────── */}
       {editApp && (
-        <div className="fixed inset-0 z-50 flex items-end justify-end bg-black/30 backdrop-blur-sm">
-          <div className="flex h-full w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/30 backdrop-blur-sm overflow-y-auto">
+          <div className="relative flex h-auto w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl">
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-4">
               <div className="flex items-center gap-3">
@@ -990,7 +1297,7 @@ export default function ReviewApplicants({
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="px-6 py-5">
               {editDetailLoading ? (
                 <div className="flex items-center justify-center py-20">
                   <Loader2 size={24} className="animate-spin text-slate-400" />
@@ -1004,9 +1311,11 @@ export default function ReviewApplicants({
                 <ApplicationDetailForm
                   detail={editDetail}
                   onChange={updateEditDetail}
+                  onEducationChange={updateEditEducation}
+                  paymentInfo={editPaymentInfo}
                   documents={editDocuments}
                   onDocumentsChange={handleDocumentChange}
-                  showDocuments={canEditDocuments}
+                  showDocuments={true}
                 />
               ) : null}
 
@@ -1055,7 +1364,197 @@ export default function ReviewApplicants({
           </div>
         </div>
       )}
+      <FeeConcessionDialog
+        applicationId={feeConcessionApplicationId ?? ""}
+        open={Boolean(feeConcessionApplicationId)}
+        onOpenChange={(open) => {
+          if (!open) setFeeConcessionApplicationId(null);
+        }}
+      />
 
+      {/* ── Admit Dialog ──────────────────────────────────────────────────── */}
+      {admitDialogApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <ThumbsUp size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Admit Applicant</h3>
+                  <p className="text-xs text-slate-400">
+                    {admitDialogApp.firstName} {admitDialogApp.lastName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setAdmitDialogApp(null); setAdmitDialogData(null); }}
+                disabled={admitSaving}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 disabled:opacity-40"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4">
+              {admitDialogLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 size={24} className="animate-spin text-emerald-500" />
+                </div>
+              )}
+
+              {admitDialogError && (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  {admitDialogError}
+                </div>
+              )}
+
+              {!admitDialogLoading && admitDialogData && (
+                <>
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                    Admitting this applicant will create a <strong>Student record</strong> and update all linked fee records. This action is <strong>irreversible</strong>.
+                  </p>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-100">
+                    {[
+                      { label: "Programme", value: admitDialogData.program?.programName ?? "—" },
+                      { label: "Degree Level", value: admitDialogData.degreeLevel?.levelName ?? "—" },
+                      { label: "Batch", value: admitDialogData.batch?.batchName ?? "Not assigned" },
+                      { label: "School", value: admitDialogData.program?.school?.name ?? "—" },
+                      { label: "Department", value: admitDialogData.program?.department?.name ?? "—" },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <span className="text-slate-500 font-medium">{label}</span>
+                        <span className="text-slate-800 font-semibold text-right">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {!admitDialogData.batch && (
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                      <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                      No batch assigned. Please assign a fee concession and batch before admitting.
+                    </div>
+                  )}
+                </>
+              )}
+
+              {admitError && (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  {admitError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => { setAdmitDialogApp(null); setAdmitDialogData(null); }}
+                disabled={admitSaving}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                id="btn-confirm-admit"
+                type="button"
+                onClick={handleAdmit}
+                disabled={admitSaving || admitDialogLoading || !admitDialogData?.batch}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {admitSaving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                {admitSaving ? "Admitting..." : "Confirm Admit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reject Dialog ─────────────────────────────────────────────────── */}
+      {rejectDialogApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                  <ThumbsDown size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Reject Application</h3>
+                  <p className="text-xs text-slate-400">
+                    {rejectDialogApp.firstName} {rejectDialogApp.lastName}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setRejectDialogApp(null); setRejectReason(""); }}
+                disabled={rejectSaving}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 disabled:opacity-40"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Rejecting this application is <strong>irreversible</strong>. Please provide a reason so the applicant understands why their application was not approved.
+              </p>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="reject-reason" className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  Rejection Reason <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  id="reject-reason"
+                  rows={4}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="e.g. Documents incomplete, eligibility criteria not met..."
+                  disabled={rejectSaving}
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-100 resize-none disabled:opacity-60"
+                />
+                <p className="text-xs text-slate-400">{rejectReason.trim().length} / 500 characters</p>
+              </div>
+
+              {rejectError && (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  {rejectError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => { setRejectDialogApp(null); setRejectReason(""); }}
+                disabled={rejectSaving}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                id="btn-confirm-reject"
+                type="button"
+                onClick={handleReject}
+                disabled={rejectSaving || !rejectReason.trim()}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {rejectSaving ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                {rejectSaving ? "Rejecting..." : "Confirm Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1110,35 +1609,43 @@ function ApplicationDetailContent({ detail }: { detail: ApplicationDetail }) {
 
       {detail.studentEducationDetails?.length > 0 && (
         <Section icon={<BookOpen size={15} />} title="Education Details">
-          {detail.studentEducationDetails.map((edu) => (
-            <div key={edu.id} className="grid grid-cols-2 gap-3">
-              <InfoRow label="SSC Board" value={edu.sscBoard} />
-              <InfoRow label="SSC Institution" value={edu.sscInstitutionName} />
-              <InfoRow label="SSC Hall Ticket" value={edu.sscHallTicketNo} />
-              <InfoRow label="SSC Year" value={edu.sscYearOfPassing?.toString()} />
-              <InfoRow label="SSC %" value={edu.sscPercentage?.toString()} />
-              <InfoRow label="Intermediate Board" value={edu.intermediateBoard} />
-              <InfoRow label="Intermediate Institution" value={edu.intermediateInstitutionName} />
-              <InfoRow label="Intermediate Hall Ticket" value={edu.intermediateHallTicketNo} />
-              <InfoRow label="Intermediate Year" value={edu.intermediateYearOfPassing?.toString()} />
-              <InfoRow label="Intermediate %" value={edu.intermediatePercentage?.toString()} />
-              {edu.ugBoard && (
-                <>
-                  <InfoRow label="UG Board / University" value={edu.ugBoard} />
-                  <InfoRow label="UG Institution" value={edu.ugInstitutionName} />
-                  <InfoRow label="UG Year" value={edu.ugYearOfPassing?.toString()} />
-                  <InfoRow label="UG %" value={edu.ugPercentage?.toString()} />
-                </>
-              )}
-              {edu.pgBoard && (
-                <>
-                  <InfoRow label="PG Board / University" value={edu.pgBoard} />
-                  <InfoRow label="PG Year" value={edu.pgYearOfPassing?.toString()} />
-                  <InfoRow label="PG %" value={edu.pgPercentage?.toString()} />
-                </>
-              )}
-            </div>
-          ))}
+          {detail.studentEducationDetails.map((edu) => {
+            const degreeLevel = detail.degreeLevel?.levelName ?? "";
+            const showUG = dlIsPG(degreeLevel) || dlIsPhd(degreeLevel);
+            const showPG = dlIsPhd(degreeLevel);
+            return (
+              <div key={edu.id} className="grid grid-cols-2 gap-3">
+                <InfoRow label="SSC Board" value={edu.sscBoard} />
+                <InfoRow label="SSC Institution" value={edu.sscInstitutionName} />
+                <InfoRow label="SSC Hall Ticket" value={edu.sscHallTicketNo} />
+                <InfoRow label="SSC Year" value={edu.sscYearOfPassing?.toString()} />
+                <InfoRow label="SSC %" value={edu.sscPercentage?.toString()} />
+                <InfoRow label="Intermediate Board" value={edu.intermediateBoard} />
+                <InfoRow label="Intermediate Institution" value={edu.intermediateInstitutionName} />
+                <InfoRow label="Intermediate Hall Ticket" value={edu.intermediateHallTicketNo} />
+                <InfoRow label="Intermediate Year" value={edu.intermediateYearOfPassing?.toString()} />
+                <InfoRow label="Intermediate %" value={edu.intermediatePercentage?.toString()} />
+                {showUG && (
+                  <>
+                    <InfoRow label="UG Board / University" value={edu.ugBoard} />
+                    <InfoRow label="UG Institution" value={edu.ugInstitutionName} />
+                    <InfoRow label="UG Hall Ticket" value={edu.ugHallTicketNo} />
+                    <InfoRow label="UG Year" value={edu.ugYearOfPassing?.toString()} />
+                    <InfoRow label="UG %" value={edu.ugPercentage?.toString()} />
+                  </>
+                )}
+                {showPG && (
+                  <>
+                    <InfoRow label="PG Board / University" value={edu.pgBoard} />
+                    <InfoRow label="PG Institution" value={edu.pgInstitutionName} />
+                    <InfoRow label="PG Hall Ticket" value={edu.pgHallTicketNo} />
+                    <InfoRow label="PG Year" value={edu.pgYearOfPassing?.toString()} />
+                    <InfoRow label="PG %" value={edu.pgPercentage?.toString()} />
+                  </>
+                )}
+              </div>
+            );
+          })}
         </Section>
       )}
 
@@ -1153,25 +1660,42 @@ function ApplicationDetailContent({ detail }: { detail: ApplicationDetail }) {
 
       <Section icon={<FileText size={15} />} title="Documents">
         <div className="grid gap-3 sm:grid-cols-2">
-          {DOCUMENT_KEYS.map((key) => (
-            <div key={key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-slate-700">{DOCUMENT_LABELS[key]}</span>
-                {detail.documents?.[key] ? (
-                  <a
-                    href={detail.documents[key] ?? undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-medium text-blue-600 hover:underline"
-                  >
-                    View
-                  </a>
-                ) : (
-                  <span className="text-xs font-semibold text-rose-500">Not uploaded</span>
-                )}
+          {(() => {
+            const degreeLevel = detail.degreeLevel?.levelName ?? "";
+            const showUG = dlIsPG(degreeLevel) || dlIsPhd(degreeLevel);
+            const showPG = dlIsPhd(degreeLevel);
+            const visibleKeys: DocumentKey[] = [
+              "aadharCard",
+              "passportPhoto",
+              "studentSignature",
+              "sscMemo",
+              "intermediateMemo",
+              "bonafideCertificate",
+              "transferCertificate",
+              ...(showUG ? (["ugMemo"] as DocumentKey[]) : []),
+              ...(showPG ? (["pgMemo"] as DocumentKey[]) : []),
+              "gapCertificate",
+            ];
+            return visibleKeys.map((key) => (
+              <div key={key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-700">{DOCUMENT_LABELS[key]}</span>
+                  {detail.documents?.[key] ? (
+                    <a
+                      href={detail.documents[key] ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      View
+                    </a>
+                  ) : (
+                    <span className="text-xs font-semibold text-rose-500">Not uploaded</span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ));
+          })()}
         </div>
       </Section>
     </div>
@@ -1181,16 +1705,22 @@ function ApplicationDetailContent({ detail }: { detail: ApplicationDetail }) {
 function ApplicationDetailForm({
   detail,
   onChange,
+  onEducationChange,
+  paymentInfo,
   documents,
   onDocumentsChange,
   showDocuments,
 }: {
   detail: ApplicationDetail;
   onChange: (field: keyof ApplicationDetail, value: string | boolean | null) => void;
+  onEducationChange: (field: keyof EducationDetail, value: string) => void;
+  paymentInfo: PaymentInfo | null;
   documents: UploadedDocuments;
   onDocumentsChange: (updates: Partial<UploadedDocuments>) => void;
   showDocuments: boolean;
 }) {
+  const education = detail.studentEducationDetails?.[0] ?? createEmptyEducationDetail();
+
   return (
     <div className="flex flex-col gap-6">
       <Section icon={<GraduationCap size={15} />} title="Programme">
@@ -1245,6 +1775,48 @@ function ApplicationDetailForm({
         </div>
       </Section>
 
+      <Section icon={<BookOpen size={15} />} title="Education Details">
+        <div className="grid grid-cols-2 gap-3">
+          <FormRow label="SSC Board" value={education.sscBoard} onChange={(value) => onEducationChange("sscBoard", value)} />
+          <FormRow label="SSC Institution" value={education.sscInstitutionName} onChange={(value) => onEducationChange("sscInstitutionName", value)} />
+          <FormRow label="SSC Hall Ticket" value={education.sscHallTicketNo} onChange={(value) => onEducationChange("sscHallTicketNo", value)} />
+          <FormRow label="SSC Year" value={education.sscYearOfPassing?.toString() ?? null} onChange={(value) => onEducationChange("sscYearOfPassing", value)} />
+          <FormRow label="SSC %" value={education.sscPercentage?.toString() ?? null} onChange={(value) => onEducationChange("sscPercentage", value)} />
+          <FormRow label="Intermediate Board" value={education.intermediateBoard} onChange={(value) => onEducationChange("intermediateBoard", value)} />
+          <FormRow label="Intermediate Institution" value={education.intermediateInstitutionName} onChange={(value) => onEducationChange("intermediateInstitutionName", value)} />
+          <FormRow label="Intermediate Hall Ticket" value={education.intermediateHallTicketNo} onChange={(value) => onEducationChange("intermediateHallTicketNo", value)} />
+          <FormRow label="Intermediate Year" value={education.intermediateYearOfPassing?.toString() ?? null} onChange={(value) => onEducationChange("intermediateYearOfPassing", value)} />
+          <FormRow label="Intermediate %" value={education.intermediatePercentage?.toString() ?? null} onChange={(value) => onEducationChange("intermediatePercentage", value)} />
+          {(() => {
+            const degreeLevel = detail.degreeLevel?.levelName ?? "";
+            const showUG = dlIsPG(degreeLevel) || dlIsPhd(degreeLevel);
+            const showPG = dlIsPhd(degreeLevel);
+            return (
+              <>
+                {showUG && (
+                  <>
+                    <FormRow label="UG Board / University" value={education.ugBoard} onChange={(value) => onEducationChange("ugBoard", value)} />
+                    <FormRow label="UG Institution" value={education.ugInstitutionName} onChange={(value) => onEducationChange("ugInstitutionName", value)} />
+                    <FormRow label="UG Hall Ticket" value={education.ugHallTicketNo} onChange={(value) => onEducationChange("ugHallTicketNo", value)} />
+                    <FormRow label="UG Year" value={education.ugYearOfPassing?.toString() ?? null} onChange={(value) => onEducationChange("ugYearOfPassing", value)} />
+                    <FormRow label="UG %" value={education.ugPercentage?.toString() ?? null} onChange={(value) => onEducationChange("ugPercentage", value)} />
+                  </>
+                )}
+                {showPG && (
+                  <>
+                    <FormRow label="PG Board / University" value={education.pgBoard} onChange={(value) => onEducationChange("pgBoard", value)} />
+                    <FormRow label="PG Institution" value={education.pgInstitutionName} onChange={(value) => onEducationChange("pgInstitutionName", value)} />
+                    <FormRow label="PG Hall Ticket" value={education.pgHallTicketNo} onChange={(value) => onEducationChange("pgHallTicketNo", value)} />
+                    <FormRow label="PG Year" value={education.pgYearOfPassing?.toString() ?? null} onChange={(value) => onEducationChange("pgYearOfPassing", value)} />
+                    <FormRow label="PG %" value={education.pgPercentage?.toString() ?? null} onChange={(value) => onEducationChange("pgPercentage", value)} />
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      </Section>
+
       <Section icon={<FileText size={15} />} title="Entrance Exam">
         <div className="grid grid-cols-2 gap-3">
           <FormRow label="Exam Name" value={detail.quallingEntranceExam} onChange={(value) => onChange("quallingEntranceExam", value)} />
@@ -1261,6 +1833,20 @@ function ApplicationDetailForm({
           />
         </div>
       </Section>
+
+      {paymentInfo && (
+        <Section icon={<FileText size={15} />} title="Payment Details">
+          <div className="grid grid-cols-2 gap-3">
+            <InfoRow label="Payment Status" value={paymentInfo.paymentStatus ?? "—"} />
+            <InfoRow label="Invoice Number" value={paymentInfo.invoiceNumber} />
+            <InfoRow label="Receipt Number" value={paymentInfo.receiptNumber} />
+            <InfoRow label="Amount" value={formatCurrency(paymentInfo.amount)} />
+            <InfoRow label="Amount Paid" value={formatCurrency(paymentInfo.amountPaid)} />
+            <InfoRow label="Amount Due" value={formatCurrency(paymentInfo.amountDue)} />
+            <InfoRow label="Paid At" value={paymentInfo.paidAt ? new Date(paymentInfo.paidAt).toLocaleString("en-IN") : null} />
+          </div>
+        </Section>
+      )}
 
       {showDocuments && (
         <Section icon={<FileText size={15} />} title="Documents">

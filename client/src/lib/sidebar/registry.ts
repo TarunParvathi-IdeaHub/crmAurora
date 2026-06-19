@@ -11,6 +11,7 @@ import {
   applicantMgmtMenu,
 } from "./menus/crm";
 import { adminRolesPermissionsMenu } from "./menus/admin";
+import { ApplicantMenu } from "./menus/applicant";
 import type { ModuleRoute } from "./types";
 
 /**
@@ -110,7 +111,19 @@ export const moduleRegistry: ModuleRoute[] = [
     routePrefix: "/modules/crm/applicants/application",
     roles: ["Applicant"],
     menu: applicantMgmtMenu,
-  }
+  },
+
+  // ── Applicant: Undertaking + Fee Module ────────────────────────────────────
+  {
+    routePrefix: "/modules/crm/applicants/undertaking",
+    roles: ["Applicant"],
+    menu: ApplicantMenu,
+  },
+  {
+    routePrefix: "/modules/crm/applicants/fees",
+    roles: ["Applicant"],
+    menu: ApplicantMenu,
+  },
 
   // ── Register additional modules below ─────────────────────────────────────
   // Example:

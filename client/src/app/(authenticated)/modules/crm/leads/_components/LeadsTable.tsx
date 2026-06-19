@@ -703,16 +703,24 @@ export default function LeadsTable({ filter, pageTitle, pageDescription }: Leads
       });
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) { setEditError(data?.error ?? "Update failed."); return; }
+      const updatedLead: Partial<Lead> = {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        mobileNo: editForm.mobileNo.trim(),
+        email: editForm.email.trim(),
+        studyLevel: leadDetail.degreeLevel.levelName,
+        programApplied: leadDetail.program.programName,
+        admissionCycle: leadDetail.admissionCycle.admissionCycleName,
+      };
+
       // Reflect changes in the table
       setLeads((prev) =>
         prev.map((l) =>
-          l.id === leadDetail.id
-            ? { ...l, firstName: editForm.firstName.trim(), lastName: editForm.lastName.trim(), mobileNo: editForm.mobileNo.trim(), email: editForm.email.trim() }
-            : l
+          l.id === leadDetail.id ? { ...l, ...updatedLead } : l
         )
       );
       setViewLead((prev) =>
-        prev ? { ...prev, firstName: editForm.firstName.trim(), lastName: editForm.lastName.trim(), mobileNo: editForm.mobileNo.trim(), email: editForm.email.trim() } : prev
+        prev ? { ...prev, ...updatedLead } : prev
       );
       setIsEditing(false);
       setViewLead(null);

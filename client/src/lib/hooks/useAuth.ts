@@ -7,6 +7,7 @@ import type { Role } from "@/types/role";
 type AuthUser = {
   userId?: string;
   email?: string;
+  fullName?: string;
   role?: Role;     // normalized camelCase (e.g. "collegeAdmin")
   rawRole?: string; // raw backend string (e.g. "College Admin") — used for API calls
   isFirstLogin?: boolean;
@@ -33,6 +34,7 @@ export function useAuth() {
       setUser({
         userId: toOptionalString(parsed.userId),
         email: toOptionalString(parsed.email),
+        fullName: toOptionalString(parsed.fullName),
         role: normalizeRole(parsed.role) ?? undefined,
         rawRole: toOptionalString(parsed.role),
         isFirstLogin: Boolean(parsed.isFirstLogin),

@@ -25,19 +25,12 @@ type Institution = {
   isActive?: boolean;
 };
 
-type FeeCategoryType =
-  | "APPLICATION_FEE"
-  | "REGISTRATION_FEE"
-  | "TUITION_FEE"
-  | "HOSTEL_FEE"
-  | "TRANSPORT_FEE"
-  | "EXAM_FEE";
 
 type FeeCategory = {
   id: string;
   institutionId: string;
   institutionName: string;
-  categoryType: FeeCategoryType;
+  categoryType: string;
   feeName: string;
   amount: number | null;
   isFixed: boolean;
@@ -48,7 +41,7 @@ type FeeCategory = {
 type RawFeeCategory = {
   id: string;
   institutionId: string;
-  categoryType: FeeCategoryType;
+  categoryType: string;
   feeName: string;
   amount: number | null;
   isFixed: boolean;
@@ -66,33 +59,7 @@ type RawFeeCategory = {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
 
-const categoryOptions = [
-  { value: "APPLICATION_FEE", label: "Application Fee" },
-  { value: "REGISTRATION_FEE", label: "Registration Fee" },
-  { value: "TUITION_FEE", label: "Tution Fee" },
-  { value: "HOSTEL_FEE", label: "Hostel Fee" },
-  { value: "TRANSPORT_FEE", label: "Transport Fee" },
-  { value: "EXAM_FEE", label: "Exam Fee" },
-] as const satisfies ReadonlyArray<{ value: FeeCategoryType; label: string }>;
 
-const categoryLabelMap = Object.fromEntries(
-  categoryOptions.map((option) => [option.value, option.label])
-) as Record<FeeCategoryType, string>;
-
-function normalizeCategoryTypeInput(value: string): FeeCategoryType | null {
-  const normalizedInput = value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
-  if (!normalizedInput) return null;
-
-  for (const option of categoryOptions) {
-    const normalizedLabel = option.label.toLowerCase().replace(/[\s_-]+/g, " ");
-    const normalizedValue = option.value.toLowerCase().replace(/[\s_-]+/g, " ");
-    if (normalizedInput === normalizedLabel || normalizedInput === normalizedValue) {
-      return option.value;
-    }
-  }
-
-  return null;
-}
 
 const readOnlyInstitutionClassName =
   "mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100";
@@ -100,7 +67,7 @@ const readOnlyInstitutionClassName =
 function createEmptyForm(institutionId = "") {
   return {
     institutionId,
-    categoryType: "" as "" | FeeCategoryType,
+    categoryType: "",
     categoryTypeInput: "",
     feeName: "",
     amount: "",
@@ -148,7 +115,7 @@ export default function FeeCategoryPage() {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return feeCategories;
     return feeCategories.filter((category) => {
-      const typeLabel = categoryLabelMap[category.categoryType]?.toLowerCase() ?? "";
+      const typeLabel = category.categoryType?.toLowerCase() ?? "";
       return (
         category.institutionName.toLowerCase().includes(q) ||
         typeLabel.includes(q) ||
@@ -269,7 +236,7 @@ export default function FeeCategoryPage() {
       setFormData({
         institutionId: selectedCategory.institutionId,
         categoryType: selectedCategory.categoryType,
-        categoryTypeInput: categoryLabelMap[selectedCategory.categoryType],
+        categoryTypeInput: selectedCategory.categoryType,
         feeName: selectedCategory.feeName,
         amount: selectedCategory.amount !== null ? String(selectedCategory.amount) : "",
         isFixed: selectedCategory.isFixed,
@@ -294,7 +261,7 @@ export default function FeeCategoryPage() {
     setFormData({
       institutionId: category.institutionId,
       categoryType: category.categoryType,
-      categoryTypeInput: categoryLabelMap[category.categoryType],
+      categoryTypeInput: category.categoryType,
       feeName: category.feeName,
       amount: category.amount !== null ? String(category.amount) : "",
       isFixed: category.isFixed,
@@ -331,11 +298,11 @@ export default function FeeCategoryPage() {
 
     const parsedCategoryType =
       mode === "create"
-        ? normalizeCategoryTypeInput(formData.categoryTypeInput)
+        ? formData.categoryTypeInput.trim()
         : selectedCategory?.categoryType ?? null;
 
     if (!parsedCategoryType) {
-      setError("Please enter a valid fee type.");
+      setError("Please enter a category type.");
       return;
     }
 
@@ -357,7 +324,7 @@ export default function FeeCategoryPage() {
         const payload = {
           institutionId: formData.institutionId,
           categoryType: parsedCategoryType,
-          feeName: formData.feeName || categoryLabelMap[parsedCategoryType],
+          feeName: formData.feeName || parsedCategoryType,
           amount: parsedAmount,
           isFixed: formData.isFixed,
         };
@@ -422,7 +389,7 @@ export default function FeeCategoryPage() {
     try {
       const payload = {
         id: selectedCategory.id,
-        feeName: formData.feeName || categoryLabelMap[selectedCategory.categoryType],
+        feeName: formData.feeName || selectedCategory.categoryType,
         amount: formData.isFixed ? parsedAmount : null,
         isFixed: formData.isFixed,
         isActive: formData.isActive,
@@ -614,7 +581,7 @@ export default function FeeCategoryPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                           <h3 className="min-w-0 flex-1 break-words text-base font-semibold text-slate-900" title={category.feeName}>
-                            {categoryLabelMap[category.categoryType]}
+                            {category.categoryType}
                           </h3>
                           <span
                             className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
@@ -702,7 +669,7 @@ export default function FeeCategoryPage() {
                 {mode === "edit" && selectedCategory ? (
                   <span className="inline-flex max-w-[11rem] items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
                     <ChevronRight size={14} />
-                    <span className="truncate">{categoryLabelMap[selectedCategory.categoryType]}</span>
+                    <span className="truncate">{selectedCategory.categoryType}</span>
                   </span>
                 ) : null}
               </div>

@@ -21,7 +21,7 @@ export default function Navbar() {
   const { profile, clearProfile } = useProfile();
   const role = normalizeRole(user?.role);
   const roleTitle = role ? ROLE_NAMES[role] : roleTitleFallback;
-  const displayName = profile?.fullName ?? user?.email ?? user?.userId ?? "Guest User";
+  const displayName = profile?.fullName ?? user?.fullName ?? user?.email ?? user?.userId ?? "Guest User";
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);

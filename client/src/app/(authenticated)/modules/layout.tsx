@@ -86,6 +86,8 @@ export default function ModulesLayout({ children }: ModulesLayoutProps) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  // Only the multi-step application form is full-screen (no sidebar).
+  // Undertaking and fees pages use the standard ModuleSidebar.
   const isApplicantPage = pathname.startsWith("/modules/crm/applicants/application");
 
   // Proximity-based sidebar expand/collapse

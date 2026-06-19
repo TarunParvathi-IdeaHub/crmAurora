@@ -177,10 +177,40 @@ export default function UndertakingTemplates() {
     setViewMode("preview");
   }
 
-  function toggleActive(id: string) {
+  async function toggleActive(id: string) {
+    const target = templates.find((t) => t.id === id);
+    if (!target) return;
+
+    const nextActive = !target.isActive;
     setTemplates((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, isActive: !t.isActive } : t))
+      prev.map((t) => (t.id === id ? { ...t, isActive: nextActive } : t))
     );
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/undertaking-templates/update`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ id, isActive: nextActive }),
+      });
+
+      if (!res.ok) {
+        throw new Error();
+      }
+
+      const data = (await res.json()) as { template?: ServerTemplate; error?: string };
+      const updatedTemplate = data?.template;
+      if (updatedTemplate) {
+        setTemplates((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, isActive: updatedTemplate.isActive } : t))
+        );
+      }
+    } catch {
+      setListError('Failed to update template activation status. Please try again.');
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, isActive: target.isActive } : t))
+      );
+    }
   }
 
   // ── Builder: save → POST /api/undertaking-templates/create per programme ───

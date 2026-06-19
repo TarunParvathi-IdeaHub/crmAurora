@@ -68,6 +68,7 @@ export default function EntranceDetailsStep({
 
     onChange({ [name]: nextValue });
   };
+  
 
   const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onChange({
@@ -94,6 +95,7 @@ export default function EntranceDetailsStep({
           name="quallingEntranceExam"
           value={data.quallingEntranceExam || ""}
           onChange={handleSelect}
+          required
           className={
             errors.quallingEntranceExam ? errorInputCls : inputCls
           }
@@ -123,6 +125,7 @@ export default function EntranceDetailsStep({
             maxLength={50}
             inputMode="decimal"
             pattern="[0-9.]*"
+            required
             className={
               errors.entranceExamHallTicketNo
                 ? errorInputCls
@@ -143,6 +146,7 @@ export default function EntranceDetailsStep({
             maxLength={20}
             inputMode="decimal"
             pattern="[0-9.]*"
+            required
             className={
               errors.entranceExamRank
                 ? errorInputCls
@@ -152,8 +156,46 @@ export default function EntranceDetailsStep({
           <FieldError message={errors.entranceExamRank} />
         </div>
       </div>
+      {/* AURUM Exam Interest */}
+<div>
+  <Label required>
+    Interested to write AURUM Exam?
+  </Label>
 
-      <hr className="border-slate-200" />
+  <div className="mt-3 flex gap-6">
+    <label className="flex items-center gap-2 text-sm text-slate-700">
+      <input
+        type="radio"
+        name="intrestedInAurumExam"
+        checked={data.intrestedInAurumExam === true}
+        onChange={() =>
+          onChange({
+            intrestedInAurumExam: true,
+          })
+        }
+        className="h-4 w-4"
+      />
+      Yes, I am interested
+    </label>
+
+    <label className="flex items-center gap-2 text-sm text-slate-700">
+      <input
+        type="radio"
+        name="intrestedInAurumExam"
+        checked={data.intrestedInAurumExam === false}
+        onChange={() =>
+          onChange({
+            intrestedInAurumExam: false,
+          })
+        }
+        className="h-4 w-4"
+      />
+      No, I am not interested
+    </label>
+  </div>
+
+  <FieldError message={errors.intrestedInAurumExam} />
+</div>
     </div>
   );
 }

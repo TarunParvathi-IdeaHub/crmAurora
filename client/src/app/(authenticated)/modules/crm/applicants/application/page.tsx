@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useProfile } from "@/providers/ProfileProvider";
+import { fetchMyAdmissionDetails, type MyAdmissionDetails } from "@/lib/api/admission";
 import type {
   ApplicationFormState,
   ApplicationStatus,
@@ -21,6 +22,7 @@ import EducationDetailsStep from "@/components/applicant/application/steps/Educa
 import EntranceDetailsStep from "@/components/applicant/application/steps/EntranceDetailsStep";
 import UploadDocumentsStep from "@/components/applicant/application/steps/UploadDocumentsStep";
 import PreviewStep from "@/components/applicant/application/steps/PreviewStep";
+import ApplicationSubmittedCard from "@/components/applicant/application/ApplicationSubmittedCard";
 import {
   getDobValidationMessage,
   getIndianCurrentYear,
@@ -30,6 +32,10 @@ import {
   getUGYears,
   syncIndianClockWithServer,
 } from "@/lib/utils/admissionDateRules";
+import {
+  isApplicationEditable,
+  normalizeApplicationStatus,
+} from "@/lib/utils/applicationStatus";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000";
 
@@ -84,7 +90,7 @@ const INITIAL_STATE: ApplicationFormState = {
   entranceExamDetails: EMPTY_ENTRANCE,
   documents: EMPTY_DOCUMENTS,
   paymentStatus: "PENDING",
-  applicationStatus: "DRAFT",
+  applicationStatus: "SAVED_AS_DRAFT",
   hasGap: false,
   consentDeclaration: "",
 };
@@ -100,6 +106,27 @@ function dlIsPG(dl: string): boolean {
 function dlIsPhd(dl: string): boolean {
   const n = dl.toLowerCase();
   return n.includes("doctor of philosophy") || n.includes("phd");
+}
+
+function detectAcademicGap(education: EducationDetails, dl: string): boolean {
+  const sscYear = Number(education.sscYearOfPassing);
+  const intermediateYear = Number(education.intermediateYearOfPassing);
+  const ugYear = Number(education.ugYearOfPassing);
+  const pgYear = Number(education.pgYearOfPassing);
+
+  if (!Number.isFinite(sscYear) || !Number.isFinite(intermediateYear)) {
+    return false;
+  }
+
+  const gapAfterSSC = intermediateYear > sscYear + 2;
+  const gapAfterIntermediate = (dlIsPG(dl) || dlIsPhd(dl)) && Number.isFinite(ugYear)
+    ? ugYear > intermediateYear + (dlIsPhd(dl) ? 3 : 4)
+    : false;
+  const gapAfterUG = dlIsPhd(dl) && Number.isFinite(pgYear) && Number.isFinite(ugYear)
+    ? pgYear > ugYear + 2
+    : false;
+
+  return gapAfterSSC || gapAfterIntermediate || gapAfterUG;
 }
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -119,28 +146,23 @@ const ENTRANCE_NUM_RE = /^[\d.]+$/;
 function isStepComplete(step: number, state: ApplicationFormState, dl = ""): boolean {
   if (step === 0) {
     const b = state.basicDetails;
+    // All mandatory fields must be present
     const hasRequired = !!(
       b.firstName && b.lastName && b.dateOfBirth && b.gender &&
-      MOBILE_RE.test(b.mobileNo) && b.email.includes("@") &&
-      b.aadharNo && b.bloodGroup && b.caste && b.subCaste &&
-      b.state && b.city && b.pincode && b.presentAddress && b.permanentAddress &&
-      b.fatherName && b.fatherMobileNo && b.fatherEmail &&
-      b.motherName && b.motherMobileNo && b.motherEmail
+      MOBILE_RE.test(b.mobileNo) && b.email.includes("@")
     );
-    if (!state.documents.aadharCard) return false;
     if (!hasRequired) return false;
-    if (getDobValidationMessage(dl, b.dateOfBirth)) return false;
     if (!NAME_RE.test(b.firstName.trim())) return false;
     if (!NAME_RE.test(b.lastName.trim())) return false;
-    if (!AADHAR_RE.test(b.aadharNo.trim())) return false;
-    if (!CASTE_RE.test(b.caste.trim())) return false;
-    if (!CASTE_RE.test(b.subCaste.trim())) return false;
-    if (!CITY_RE.test(b.city.trim())) return false;
-    if (!PINCODE_RE.test(b.pincode.trim())) return false;
-    if (!NAME_RE.test(b.fatherName.trim())) return false;
-    if (!NAME_RE.test(b.motherName.trim())) return false;
-    if (!MOBILE_RE.test(b.fatherMobileNo.trim())) return false;
-    if (!MOBILE_RE.test(b.motherMobileNo.trim())) return false;
+    if (b.aadharNo && !AADHAR_RE.test(b.aadharNo.trim())) return false;
+    if (b.caste && !CASTE_RE.test(b.caste.trim())) return false;
+    if (b.subCaste && !CASTE_RE.test(b.subCaste.trim())) return false;
+    if (b.city && !CITY_RE.test(b.city.trim())) return false;
+    if (b.pincode && !PINCODE_RE.test(b.pincode.trim())) return false;
+    if (b.fatherName && !NAME_RE.test(b.fatherName.trim())) return false;
+    if (b.motherName && !NAME_RE.test(b.motherName.trim())) return false;
+    if (b.fatherMobileNo && !MOBILE_RE.test(b.fatherMobileNo.trim())) return false;
+    if (b.motherMobileNo && !MOBILE_RE.test(b.motherMobileNo.trim())) return false;
     if (!b.isLocal) {
       if (!b.guardianName || !NAME_RE.test(b.guardianName.trim())) return false;
       if (!b.guardianMobileNo || !MOBILE_RE.test(b.guardianMobileNo.trim())) return false;
@@ -151,7 +173,7 @@ function isStepComplete(step: number, state: ApplicationFormState, dl = ""): boo
   if (step === 1) {
     const e = state.educationDetails;
     const currentYear = getIndianCurrentYear();
-    const allowedSSCYears = getSSCYears(dl, currentYear);
+    const allowedSSCYears = getSSCYears(dl, state.basicDetails.dateOfBirth, currentYear);
     const allowedIntermediateYears = getIntermediateYears(dl, e.sscYearOfPassing, currentYear);
     const allowedUGYears = getUGYears(dl, e.intermediateYearOfPassing, currentYear);
     const allowedPGYears = getPGYears(dl, e.ugYearOfPassing, currentYear);
@@ -212,6 +234,7 @@ function validateStep(
 
   if (step === 0) {
     const b = state.basicDetails;
+    // Always required fields
     if (!b.firstName.trim()) errors.firstName = "First name is required.";
     if (!b.lastName.trim()) errors.lastName = "Last name is required.";
     if (!b.dateOfBirth) errors.dateOfBirth = "Date of birth is required.";
@@ -338,7 +361,7 @@ function validateStep(
   if (step === 1) {
     const e = state.educationDetails;
     const currentYear = getIndianCurrentYear();
-    const allowedSSCYears = getSSCYears(dl, currentYear);
+    const allowedSSCYears = getSSCYears(dl, state.basicDetails.dateOfBirth, currentYear);
     const allowedIntermediateYears = getIntermediateYears(dl, e.sscYearOfPassing, currentYear);
     const allowedUGYears = getUGYears(dl, e.intermediateYearOfPassing, currentYear);
     const allowedPGYears = getPGYears(dl, e.ugYearOfPassing, currentYear);
@@ -385,6 +408,10 @@ function validateStep(
     }
     if (!state.documents.sscMemo) errors.sscMemo = "SSC / 10th document is required.";
     if (!state.documents.intermediateMemo) errors.intermediateMemo = "Intermediate / 12th document is required.";
+    const academicGapDetected = detectAcademicGap(e, dl);
+    if ((academicGapDetected || state.hasGap) && !state.documents.gapCertificate) {
+      errors.gapCertificate = "Gap certificate is required.";
+    }
     // UG required only for PG and PhD applicants
     const ugRequired = dlIsPG(dl) || dlIsPhd(dl);
     if (ugRequired) {
@@ -472,10 +499,22 @@ function validateStep(
 function focusFirstErrorField(errors: Record<string, string>) {
   const firstKey = Object.keys(errors)[0];
   if (!firstKey) return;
-  const element = document.querySelector<HTMLElement>(`[name="${firstKey}"]`);
+  // Prefer visible wrapper targets first, fall back to name attribute
+  const element =
+    document.querySelector<HTMLElement>(`[data-error-field="${firstKey}"]`) ||
+    document.querySelector<HTMLElement>(`[name="${firstKey}"]`);
   if (element) {
     element.scrollIntoView({ behavior: "smooth", block: "center" });
-    element.focus();
+    // Try to focus a focusable descendant (label, input, button, select, textarea)
+    const focusable = element.querySelector<HTMLElement>(
+      'label[for], button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    try {
+      if (focusable) focusable.focus();
+      else element.focus();
+    } catch {
+      // ignore focus errors
+    }
   }
 }
 
@@ -609,6 +648,9 @@ function buildSectionFormData(step: number, state: ApplicationFormState): FormDa
         fd.append("pgMemo", state.documents.pgMemo.file, state.documents.pgMemo.name);
       }
     }
+    if (state.documents.gapCertificate?.file) {
+      fd.append("gapCertificate", state.documents.gapCertificate.file, state.documents.gapCertificate.name);
+    }
   }
 
   if (step === 2) {
@@ -646,12 +688,14 @@ function ApplicationPage() {
   const [institutionName, setInstitutionName] = useState<string>("");
   const [programName, setProgramName] = useState<string>("");
   const [admissionCycleName, setAdmissionCycleName] = useState<string>("");
+  const [applicationNumber, setApplicationNumber] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string>("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasFetchedApplication, setHasFetchedApplication] = useState(false);
   const hasMounted = useRef(false);
   // Set to true once the server responds successfully. Guards persistDraft so
   // that a click before data loads never writes an empty draft to localStorage
@@ -753,17 +797,16 @@ function ApplicationPage() {
           feeStatus?.paymentStatus === "SUCCESS" ? "SUCCESS" :
           feeStatus?.paymentStatus === "FAILED"  ? "FAILED"  : "PENDING";
 
-        // Map backend ApplicationStatus enum to frontend type
-        const serverAppStatus: ApplicationStatus =
-          (data.applicationStatus as string) === "APPLICATION_SUBMITTED"
-            ? "SUBMITTED"
-            : "DRAFT";
+        const serverAppStatus: ApplicationStatus = normalizeApplicationStatus(
+          data.applicationStatus as string
+        );
 
         const level: string = data?.degreeLevel?.levelName ?? "";
         setDegreeLevel(level);
         setInstitutionName(data?.institution?.institutionName ?? "");
         setProgramName(data?.program?.programName ?? "");
         setAdmissionCycleName(data?.admissionCycle?.admissionCycleName ?? "");
+        setApplicationNumber(data?.applicationNumber ?? null);
 
         // Degree level is the source of truth for showing UG/PG sections.
         // Must be true regardless of whether the student has filled the fields yet.
@@ -792,6 +835,7 @@ function ApplicationPage() {
 
         // Mark that we have live server data — unblocks persistDraft.
         hasServerData.current = true;
+        setHasFetchedApplication(true);
 
         const hasDraft = !!localStorage.getItem(getDraftKey(applicationId));
 
@@ -902,12 +946,13 @@ function ApplicationPage() {
               transferCertificate: s.documents.transferCertificate?.file ? s.documents.transferCertificate : serverDocs.transferCertificate,
             },
             paymentStatus: serverPaymentStatus,
-            applicationStatus: serverAppStatus === "SUBMITTED" ? "SUBMITTED" : s.applicationStatus,
+            applicationStatus: serverAppStatus,
           }));
         }
       })
       .catch(() => {
         // Non-critical — proceed with whatever state we already have
+        setHasFetchedApplication(true);
       });
   }, [applicationId]);
 
@@ -952,7 +997,7 @@ function ApplicationPage() {
   // ── Draft persistence ────────────────────────────────────────────────────────
 
   const persistDraft = useCallback((state: ApplicationFormState) => {
-    if (!applicationId) return;
+    const draftKeyId = applicationId ?? localStorage.getItem(APP_ID_KEY) ?? "temp-application-draft";
     try {
       // Strip blob URLs / File objects before storing (not serialisable)
       const docs: UploadedDocuments = {} as UploadedDocuments;
@@ -960,7 +1005,7 @@ function ApplicationPage() {
         const doc = state.documents[k];
         docs[k] = doc ? { name: doc.name, size: doc.size, previewUrl: null, file: null } : null;
       }
-      localStorage.setItem(getDraftKey(applicationId), JSON.stringify({ ...state, documents: docs }));
+      localStorage.setItem(getDraftKey(draftKeyId), JSON.stringify({ ...state, documents: docs }));
     } catch {
       // Storage quota exceeded or SSR
     }
@@ -980,7 +1025,14 @@ function ApplicationPage() {
     step: number,
     state: ApplicationFormState
   ): Promise<boolean> => {
-    if (!applicationId) return false;
+    if (!applicationId) {
+      // No application ID yet; save locally and allow navigation.
+      persistDraft(state);
+      setLastSavedAt(new Date());
+      setSaveSuccess(true);
+      setSaveError("");
+      return true;
+    }
     // Only persist to localStorage once the server has responded at least once.
     // This prevents a click before data loads from writing an empty INITIAL_STATE
     // draft — which would then block full server hydration on the next page load.
@@ -1136,22 +1188,17 @@ function ApplicationPage() {
   // ── Navigation ───────────────────────────────────────────────────────────────
 
   const handleNext = useCallback(async () => {
-    console.log("🔍 handleNext called, currentStep:", appState.currentStep);
     if (isSaving) {
-      console.log("⏳ Already saving, returning");
       return;
     }
     const stepErrors = validateStep(appState.currentStep, appState, degreeLevel);
-    console.log("✓ Validation errors:", stepErrors);
     if (Object.keys(stepErrors).length > 0) {
-      console.log("❌ Found validation errors, setting errors state:", stepErrors);
       setErrors(stepErrors);
       setTimeout(() => {
         focusFirstErrorField(stepErrors);
       }, 100);
       return;
     }
-    console.log("✅ No validation errors, proceeding to save");
     setErrors({});
     setIsSaving(true);
     setSaveError("");
@@ -1190,7 +1237,6 @@ function ApplicationPage() {
       setAppState((s) => ({
         ...s,
         basicDetails: { ...s.basicDetails, ...updates },
-        applicationStatus: s.applicationStatus === "SUBMITTED" ? s.applicationStatus : "DRAFT",
       }));
       if (Object.keys(updates).some((k) => errors[k])) {
         setErrors((prev) => {
@@ -1356,13 +1402,15 @@ function ApplicationPage() {
           body: JSON.stringify({ consentDeclaration: consentText }),
           credentials: "include",
         }
-      );
+      );  
 
+  const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
         setSaveError((payload as { error?: string }).error ?? "Submission failed. Please try again.");
       } else {
-        setAppState((s) => ({ ...s, applicationStatus: "SUBMITTED" }));
+        const successPayload = payload as { applicationNumber?: string | null };
+        setApplicationNumber(successPayload.applicationNumber ?? applicationNumber);
+        setAppState((s) => ({ ...s, applicationStatus: "APPLICATION_SUBMITTED" }));
         // Clear the local draft — application is fully submitted
         localStorage.removeItem(getDraftKey(applicationId));
       }
@@ -1371,11 +1419,38 @@ function ApplicationPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [applicationId, appState.consentDeclaration]);
+  }, [applicationId, appState.consentDeclaration, applicationNumber]);
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const { currentStep } = appState;
+  const isEditable = isApplicationEditable(appState.applicationStatus);
+  const applicantName = `${appState.basicDetails.firstName} ${appState.basicDetails.lastName}`.trim() || profile?.fullName || "Applicant";
+
+  if (applicationId && hasFetchedApplication && !isEditable) {
+    // Dedicated admitted/rejected views — these fetch extra data from the admissions API
+    if (
+      appState.applicationStatus === "ADMISSION_GRANTED" ||
+      appState.applicationStatus === "ADMISSION_REJECTED"
+    ) {
+      return (
+        <AdmissionDecisionView
+          applicationStatus={appState.applicationStatus}
+          applicationNumber={applicationNumber}
+          institutionName={institutionName}
+          applicantName={applicantName}
+        />
+      );
+    }
+    return (
+      <ApplicationSubmittedCard
+        applicationNumber={applicationNumber}
+        applicationStatus={appState.applicationStatus}
+        institutionName={institutionName}
+        applicantName={applicantName}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 py-2">
@@ -1406,43 +1481,47 @@ function ApplicationPage() {
       )}
 
       {/* Mobile: compact progress indicator */}
-      <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:hidden">
-        <div className="flex gap-1.5">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all ${
-                completedSteps.has(i)
-                  ? "w-6 bg-emerald-500"
-                  : currentStep === i
-                  ? "w-6 bg-blue-600"
-                  : "w-3 bg-slate-200"
-              }`}
-            />
-          ))}
+      
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:hidden">
+          <div className="flex gap-1.5">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div
+                key={i}
+                className={`h-1.5 rounded-full transition-all ${
+                  completedSteps.has(i)
+                    ? "w-6 bg-emerald-500"
+                    : currentStep === i
+                    ? "w-6 bg-blue-600"
+                    : "w-3 bg-slate-200"
+                }`}
+              />
+            ))}
+          </div>
+          <p className="text-sm font-medium text-slate-700">
+            Step {currentStep + 1} of {TOTAL_STEPS}:{" "}
+            <span className="text-blue-600">
+              {["Basic Details", "Education", "Entrance Exam", "Documents", "Preview", "Payment"][currentStep]}
+            </span>
+          </p>
         </div>
-        <p className="text-sm font-medium text-slate-700">
-          Step {currentStep + 1} of {TOTAL_STEPS}:{" "}
-          <span className="text-blue-600">
-            {["Basic Details", "Education", "Entrance Exam", "Documents", "Preview", "Payment"][currentStep]}
-          </span>
-        </p>
-      </div>
+      
 
       {/* Desktop: left stepper sidebar + right form */}
       <div className="flex items-start gap-5">
         {/* Left sidebar — sticky vertical stepper */}
-        <div className="hidden w-56 shrink-0 md:block">
-          <div className="sticky top-6 rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Progress
-            </p>
-            <ApplicationStepper
-              currentStep={currentStep}
-              completedSteps={completedSteps}
-            />
+        
+          <div className="hidden w-56 shrink-0 md:block">
+            <div className="sticky top-6 rounded-2xl border border-slate-200 bg-white p-5">
+              <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Progress
+              </p>
+              <ApplicationStepper
+                currentStep={currentStep}
+                completedSteps={completedSteps}
+              />
+            </div>
           </div>
-        </div>
+        
 
         {/* Right content */}
         <div className="min-w-0 flex-1">
@@ -1463,6 +1542,9 @@ function ApplicationPage() {
                 errors={errors}
                 documents={appState.documents}
                 degreeLevel={degreeLevel}
+                dateOfBirth={appState.basicDetails.dateOfBirth}
+                hasGap={appState.hasGap}
+                onGapToggle={handleGapToggle}
                 onChange={handleEducationChange}
                 onDocumentChange={handleDocumentsChange}
               />
@@ -1479,8 +1561,6 @@ function ApplicationPage() {
                 data={appState.documents}
                 errors={errors}
                 degreeLevel={degreeLevel}
-                hasGap={appState.hasGap}
-                onGapToggle={handleGapToggle}
                 onChange={handleDocumentsChange}
               />
             )}
@@ -1555,6 +1635,193 @@ function ApplicationPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Admission Decision View ────────────────────────────────────────────────────
+// Shown when applicationStatus is ADMISSION_GRANTED or ADMISSION_REJECTED.
+// Fetches extended details (studentId, batch, remarks) from the admissions API.
+
+function AdmissionDecisionView({
+  applicationStatus,
+  applicationNumber,
+  institutionName,
+  applicantName,
+}: {
+  applicationStatus: string;
+  applicationNumber: string | null;
+  institutionName: string;
+  applicantName: string;
+}) {
+  const [details, setDetails] = useState<MyAdmissionDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setFetchError("");
+
+    fetchMyAdmissionDetails()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) setFetchError(error);
+        else if (data) setDetails(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFetchError("Failed to load admission details.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const isGranted = applicationStatus === "ADMISSION_GRANTED";
+
+  return (
+    <div className="mx-auto max-w-3xl py-6 px-4">
+      {/* Main card */}
+      <div
+        className={`rounded-3xl border p-6 shadow-sm md:p-8 ${
+          isGranted
+            ? "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-teal-50"
+            : "border-rose-200 bg-gradient-to-br from-rose-50 via-white to-slate-50"
+        }`}
+      >
+        {/* Icon + heading */}
+        <div className="flex flex-col items-center text-center mb-6">
+          <div
+            className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
+              isGranted ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
+            }`}
+          >
+            {isGranted ? (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+              </svg>
+            )}
+          </div>
+          <h1 className={`text-2xl font-bold md:text-3xl ${isGranted ? "text-emerald-800" : "text-rose-800"}`}>
+            {isGranted ? "🎉 Admission Granted!" : "Application Not Approved"}
+          </h1>
+          <p className="mt-2 max-w-lg text-sm text-slate-600 leading-relaxed">
+            {isGranted
+              ? "Congratulations! Your admission has been granted. Welcome to the institution — your academic journey begins now."
+              : "We regret to inform you that your application was not approved at this time. Please review the reason below."}
+          </p>
+        </div>
+
+        {/* Error loading details */}
+        {fetchError && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {fetchError}
+          </div>
+        )}
+
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="rounded-xl border border-slate-100 bg-slate-50 p-4 animate-pulse">
+                <div className="h-3 w-24 rounded bg-slate-200 mb-2" />
+                <div className="h-5 w-36 rounded bg-slate-200" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Granted: show admission details */}
+        {!loading && isGranted && details && (
+          <div className="grid gap-3 rounded-2xl border border-emerald-100 bg-white p-4 md:grid-cols-2">
+            <InfoTile label="Applicant" value={applicantName} accent="emerald" />
+            <InfoTile label="Application Number" value={applicationNumber ?? "—"} accent="emerald" />
+            <InfoTile label="Institution" value={institutionName || "—"} accent="emerald" />
+            <InfoTile label="Programme" value={details.program?.programName ?? "—"} accent="emerald" />
+            <InfoTile label="Degree Level" value={details.degreeLevel?.levelName ?? "—"} accent="emerald" />
+            <InfoTile label="Batch" value={details.batch?.batchName ?? "Pending Batch Assignment"} accent="emerald" />
+            <InfoTile label="Admission Cycle" value={details.admissionCycle?.admissionCycleName ?? "—"} accent="emerald" />
+            <InfoTile
+              label="Student ID"
+              value={details.studentId ?? "Being Generated"}
+              accent="emerald"
+              highlight
+            />
+          </div>
+        )}
+
+        {/* Rejected: show rejection reason */}
+        {!loading && !isGranted && (
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-3 rounded-2xl border border-rose-100 bg-white p-4 md:grid-cols-2">
+              <InfoTile label="Applicant" value={applicantName} accent="rose" />
+              <InfoTile label="Application Number" value={applicationNumber ?? "—"} accent="rose" />
+              <InfoTile label="Institution" value={institutionName || "—"} accent="rose" />
+              {details?.program && (
+                <InfoTile label="Programme Applied" value={details.program.programName} accent="rose" />
+              )}
+            </div>
+
+            {details?.remarks && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-rose-500 mb-2">
+                  Rejection Reason
+                </p>
+                <p className="text-sm text-rose-900 leading-relaxed">{details.remarks}</p>
+              </div>
+            )}
+
+            {!details?.remarks && !fetchError && !loading && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+                No specific rejection reason was provided. Please contact the admissions office for more information.
+              </div>
+            )}
+          </div>
+        )}
+
+        <p className="mt-6 text-center text-sm text-slate-500">
+          {isGranted
+            ? "You will receive further instructions from the institution regarding enrollment and orientation."
+            : "You may contact the admissions office if you have questions regarding this decision."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Small reusable info tile for the decision view
+function InfoTile({
+  label,
+  value,
+  accent,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  accent: "emerald" | "rose";
+  highlight?: boolean;
+}) {
+  const ringClass = highlight
+    ? accent === "emerald"
+      ? "ring-2 ring-emerald-300"
+      : "ring-2 ring-rose-300"
+    : "";
+  return (
+    <div className={`rounded-xl border border-slate-100 bg-slate-50 p-4 ${ringClass}`}>
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-1.5 text-sm font-semibold ${highlight ? (accent === "emerald" ? "text-emerald-700" : "text-rose-700") : "text-slate-800"}`}>
+        {value}
+      </p>
     </div>
   );
 }

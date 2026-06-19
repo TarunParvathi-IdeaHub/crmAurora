@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { authFetch } from "@/lib/utils/authFetch";
 
 type Mode = "create" | "edit";
 
@@ -123,33 +124,29 @@ export default function AdmissionCycleManagementPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const instRes = await fetch(`${API_BASE_URL}/api/institutions/current`, {
-          credentials: "include",
-        });
+        const instRes = await authFetch(`${API_BASE_URL}/api/institutions/current`);
         const instData = await instRes.json();
         const inst: Institution = instData.institution;
         setInstitution(inst);
 
         const [progRes, batchRes, cycleRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/programmes/active/by-institution/${inst.id}`, {
-            credentials: "include",
-          }),
-          fetch(`${API_BASE_URL}/api/batches/active/by-institution/${inst.id}`, {
-            credentials: "include",
-          }),
-          fetch(`${API_BASE_URL}/api/admission-cycles/read`, {
+          authFetch(`${API_BASE_URL}/api/programmes/active/by-institution/${inst.id}`),
+          authFetch(`${API_BASE_URL}/api/batches/active/by-institution/${inst.id}`),
+          authFetch(`${API_BASE_URL}/api/admission-cycles/read`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            credentials: "include",
             body: JSON.stringify({ institutionId: inst.id }),
           }),
         ]);
 
-        const progData: ProgramOption[] = await progRes.json();
+        const progData = await progRes.json();
         const batchData = await batchRes.json();
         const cycleData = await cycleRes.json();
 
-        setProgramOptions(Array.isArray(progData) ? progData : []);
+        // API returns { programmes: [...] }, not a bare array
+        setProgramOptions(
+          Array.isArray(progData?.programmes) ? progData.programmes : []
+        );
         setBatches(batchData.batches || []);
         setCycleRows(cycleData.admissionCycles || []);
       } catch (err) {
@@ -227,10 +224,9 @@ export default function AdmissionCycleManagementPage() {
           isActive: formData.isActive,
         };
 
-        const res = await fetch(`${API_BASE_URL}/api/admission-cycles/create`, {
+        const res = await authFetch(`${API_BASE_URL}/api/admission-cycles/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           body: JSON.stringify(payload),
         });
         const data = await res.json();
@@ -249,10 +245,9 @@ export default function AdmissionCycleManagementPage() {
       // Edit mode
       if (!selectedCycle) return;
 
-      const res = await fetch(`${API_BASE_URL}/api/admission-cycles/update`, {
+      const res = await authFetch(`${API_BASE_URL}/api/admission-cycles/update`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           id: selectedCycle.id,
           admissionCycleName: editName.trim(),
@@ -288,10 +283,9 @@ export default function AdmissionCycleManagementPage() {
   const handleDelete = async (cycle: AdmissionCycleRow) => {
     if (!confirm(`Delete "${cycle.admissionCycleName}"?`)) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admission-cycles/delete`, {
+      const res = await authFetch(`${API_BASE_URL}/api/admission-cycles/delete`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ id: cycle.id }),
       });
       if (!res.ok) {

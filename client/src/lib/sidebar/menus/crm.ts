@@ -23,6 +23,7 @@ import {
   Award,
   Microscope,
   CogIcon,
+  CalendarClock,
 } from "lucide-react";
 import type { MenuItem } from "../types";
 
@@ -50,6 +51,7 @@ export const admissionCounsellorDefaultMenu: MenuItem[] = [
 export const admissionsMenuDirector: MenuItem[] = [
   { id: "dashboard",              label: "Dashboard",               icon: LayoutDashboard, path: "/dashboard"},
   { id: "batch",  label: "Batch",   icon: CheckCircle2,    path: "/modules/crm/admissions/batch" },
+  { id: "academic-years", label: "Academic Years", icon: CalendarClock, path: "/modules/crm/admissions/academic-years" },
   { id: "admission-cycle",         label: "Admission Cycle", icon: Calendar,        path: "/modules/crm/admissions/admission-cycle" },
   { id: "undertaking-templates",  label: "Undertaking Templates",   icon: ClipboardCheck,  path: "/modules/crm/admissions/undertaking-templates" },
   { id: "review-applications", label: "Review Applications", icon: FileSearch,    path: "/modules/crm/admissions/review" },

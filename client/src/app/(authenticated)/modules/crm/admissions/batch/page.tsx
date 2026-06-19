@@ -118,9 +118,14 @@ export default function BatchManagementPage() {
           }),
           fetch(`${API_BASE_URL}/api/batches`, { credentials: "include" }),
         ]);
-        const progData: ProgramOption[] = await progRes.json();
+        const progData = await progRes.json();
+
+        setProgramOptions(
+          Array.isArray(progData?.programmes)
+            ? progData.programmes
+            : []
+        );
         const batchData = await batchRes.json();
-        setProgramOptions(Array.isArray(progData) ? progData : []);
         setBatches(batchData.batches || []);
       } catch (err) {
         console.error(err);
@@ -306,11 +311,10 @@ export default function BatchManagementPage() {
                           {batch.batchName}
                         </h3>
                         <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                            batch.isActive
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${batch.isActive
                               ? "bg-emerald-50 text-emerald-700"
                               : "bg-slate-100 text-slate-500"
-                          }`}
+                            }`}
                         >
                           {batch.isActive ? "Active" : "Inactive"}
                         </span>

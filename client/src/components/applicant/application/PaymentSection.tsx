@@ -29,7 +29,9 @@ export default function PaymentSection({
 }: PaymentSectionProps) {
   const isPaid = paymentStatus === "SUCCESS";
   const isFailed = paymentStatus === "FAILED";
-  const isSubmitted = applicationStatus === "SUBMITTED";
+  const isSubmitted =
+    applicationStatus === "APPLICATION_SUBMITTED" ||
+    applicationStatus === "SUBMITTED";
   const hasConsent = consentDeclaration.trim().length > 0;
 
   if (isSubmitted) {
@@ -39,12 +41,10 @@ export default function PaymentSection({
           <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-emerald-600" />
           <div>
             <p className="font-semibold text-emerald-800">
-              Application Submitted Successfully
+              Payment completed successfully.
             </p>
             <p className="mt-1 text-sm text-emerald-700">
-              Your application has been submitted. A confirmation has been sent
-              to your registered email. Keep your Application ID safe for
-              future reference.
+              Your application has been submitted and payment is confirmed. A confirmation email has been sent to your registered address.
             </p>
           </div>
         </div>

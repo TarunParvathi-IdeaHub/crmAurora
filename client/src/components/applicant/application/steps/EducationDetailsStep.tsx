@@ -45,6 +45,9 @@ type EducationDetailsStepProps = {
   onDocumentChange: (updates: Partial<UploadedDocuments>) => void;
   /** levelName from the backend, e.g. "Under Graduate (UG)" */
   degreeLevel?: string;
+  dateOfBirth?: string;
+  hasGap?: boolean;
+  onGapToggle?: (value: boolean) => void;
 };
 
 export default function EducationDetailsStep({
@@ -54,13 +57,16 @@ export default function EducationDetailsStep({
   onChange,
   onDocumentChange,
   degreeLevel = "",
+  dateOfBirth = "",
+  hasGap = false,
+  onGapToggle,
 }: EducationDetailsStepProps) {
   const currentYear = getIndianCurrentYear();
   const studyLevel = useMemo(() => normalizeStudyLevel(degreeLevel), [degreeLevel]);
 
   const sscYears = useMemo(
-    () => getSSCYears(studyLevel, currentYear),
-    [studyLevel, currentYear]
+    () => getSSCYears(studyLevel, dateOfBirth, currentYear),
+    [studyLevel, dateOfBirth, currentYear]
   );
 
   const intermediateYears = useMemo(
@@ -177,6 +183,33 @@ export default function EducationDetailsStep({
     onChange({ pgYearOfPassing: "" });
   }, [data.pgYearOfPassing, onChange, pgYears]);
 
+  const _dl = (degreeLevel ?? "").toLowerCase();
+  const isPG  = _dl.includes("post graduate") || _dl.includes("post graduation");
+  const isPhd = _dl.includes("doctor of philosophy") || _dl.includes("phd");
+  const showUG = isPG || isPhd;
+  const showPG = isPhd;
+  const ugRequired = isPG || isPhd;
+  const pgRequired = isPhd;
+
+  const sscYear = Number(data.sscYearOfPassing);
+  const intermediateYear = Number(data.intermediateYearOfPassing);
+  const ugYear = Number(data.ugYearOfPassing);
+  const pgYear = Number(data.pgYearOfPassing);
+
+  const hasAcademicGap = useMemo(() => {
+    const gapAfterSSC = Number.isFinite(sscYear) && Number.isFinite(intermediateYear) && intermediateYear > sscYear + 2;
+    const gapAfterIntermediate = showUG && Number.isFinite(ugYear) && Number.isFinite(intermediateYear)
+      ? ugYear > intermediateYear + (isPhd ? 3 : 4)
+      : false;
+    const gapAfterUG = showPG && Number.isFinite(pgYear) && Number.isFinite(ugYear)
+      ? pgYear > ugYear + 2
+      : false;
+    return gapAfterSSC || gapAfterIntermediate || gapAfterUG;
+  }, [sscYear, intermediateYear, ugYear, pgYear, showUG, showPG, isPhd]);
+
+  const showGapCertificate = hasGap || hasAcademicGap;
+  const gapCertificateRequired = showGapCertificate;
+
   const handleDocumentFileChange = (
     key: keyof UploadedDocuments,
     file: File | null
@@ -223,21 +256,12 @@ export default function EducationDetailsStep({
     </div>
   );
 
-  // Derive UG/PG section visibility from degree level
-  const _dl = (degreeLevel ?? "").toLowerCase();
-  const isPG  = _dl.includes("post graduate") || _dl.includes("post graduation");
-  const isPhd = _dl.includes("doctor of philosophy") || _dl.includes("phd");
-  const showUG = isPG || isPhd;   // UG: shown and mandatory for PG/PhD only
-  const showPG = isPhd;           // PG: shown and mandatory for PhD only
-  const ugRequired = isPG || isPhd;
-  const pgRequired = isPhd;
-
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-base font-semibold text-slate-900">Education Details</h2>
         <p className="mt-0.5 text-sm text-slate-500">
-          Enter details as per your mark sheets and certificates.
+          All fields marked with <span className="text-rose-500">*</span> are mandatory. Enter details as per your mark sheets and certificates.
           {degreeLevel && (
             <span className="ml-2 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
               {degreeLevel}
@@ -405,6 +429,37 @@ export default function EducationDetailsStep({
           </div>
         </div>
         {renderFileUpload("Upload Intermediate / 12th Document", "intermediateMemo", errors.intermediateMemo, true)}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Academic Gap Year</p>
+            <p className="mt-1 text-sm text-slate-500">
+              {hasAcademicGap
+                ? "Your selected passing years indicate an academic gap. Upload the gap certificate below."
+                : "If you had a gap in your education between passing years, toggle the checkbox and upload the gap certificate here."
+              }
+            </p>
+          </div>
+          {!hasAcademicGap && (
+            <label className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={hasGap}
+                onChange={(e) => onGapToggle?.(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>I had an academic gap year</span>
+            </label>
+          )}
+        </div>
+
+        {showGapCertificate && (
+          <div className="mt-4">
+            {renderFileUpload("Upload Gap Certificate", "gapCertificate", errors.gapCertificate, gapCertificateRequired)}
+          </div>
+        )}
       </div>
 
       {showUG && <hr className="border-slate-200" />}

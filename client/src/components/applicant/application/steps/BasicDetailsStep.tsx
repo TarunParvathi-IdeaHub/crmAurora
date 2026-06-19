@@ -22,9 +22,13 @@ const ONLY_DIGITS = /[^\d]/g;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function FieldError({ message }: { message?: string }) {
+function FieldError({ message, id }: { message?: string; id?: string }) {
   if (!message) return null;
-  return <p className="mt-1 text-xs text-rose-600">{message}</p>;
+  return (
+    <p id={id} className="mt-1 text-xs text-rose-600">
+      {message}
+    </p>
+  );
 }
 
 function Label({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -250,8 +254,22 @@ export default function BasicDetailsStep({
         </div>
         <div>
           <Label required>Upload Aadhaar Card</Label>
-          <div className="flex items-center gap-3">
-            <label htmlFor="aadharCard" className="inline-flex cursor-pointer items-center rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-blue-400 hover:bg-white">
+          <div
+            data-error-field="aadharCard"
+            tabIndex={-1}
+            className={`flex items-center gap-3 rounded-xl border px-3 py-2 transition ${
+              errors.aadharCard ? "border-rose-400 bg-rose-50" : "border-slate-300 bg-white"
+            }`}
+          >
+            <label
+              htmlFor="aadharCard"
+              tabIndex={0}
+              className={`inline-flex cursor-pointer items-center rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                errors.aadharCard
+                  ? "border-rose-400 bg-white text-rose-700 hover:border-rose-500"
+                  : "border-slate-300 bg-slate-50 text-slate-700 hover:border-blue-400 hover:bg-white"
+              }`}
+            >
               Choose file
             </label>
             <input
@@ -260,13 +278,15 @@ export default function BasicDetailsStep({
               type="file"
               accept=".pdf,.jpg,.jpeg,.png"
               onChange={handleAadharUpload}
+              aria-describedby="aadharCard-error"
+              aria-invalid={Boolean(errors.aadharCard)}
               className="sr-only"
             />
             <span className="min-w-0 truncate text-sm text-slate-500">
               {aadharCardDocument?.name || "No file chosen"}
             </span>
           </div>
-          <FieldError message={errors.aadharCard} />
+          <FieldError id="aadharCard-error" message={errors.aadharCard} />
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -440,7 +460,7 @@ export default function BasicDetailsStep({
 
       {/* Father */}
       <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Father</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Father (Mobile or Email required <span className="text-rose-500">*</span>)</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <Label required>Name</Label>
@@ -488,7 +508,7 @@ export default function BasicDetailsStep({
 
       {/* Mother */}
       <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mother</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mother (Mobile or Email required <span className="text-rose-500">*</span>)</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <Label required>Name</Label>

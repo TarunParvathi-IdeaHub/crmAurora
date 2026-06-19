@@ -153,7 +153,7 @@ export default function LeadPage() {
   const [programOptions, setProgramOptions] = useState<SelectOption[]>([]);
 
   // Loading states
-  const [loadingInstitutions, setLoadingInstitutions] = useState(false);
+  const [loadingCampuses, setLoadingCampuses] = useState(false);
   const [loadingDegreeLevels, setLoadingDegreeLevels] = useState(false);
   const [loadingPrograms, setLoadingPrograms] = useState(false);
   const [loadingCycle, setLoadingCycle] = useState(false);
@@ -165,7 +165,7 @@ export default function LeadPage() {
   // ── Fetch institutions on mount ──────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    setLoadingInstitutions(true);
+    setLoadingCampuses(true);
     setFetchError('');
 
     fetch(`${API_BASE}/api/institutions/active`, { credentials: 'include' })
@@ -183,7 +183,7 @@ export default function LeadPage() {
         if (!cancelled) setFetchError('Failed to load institutions. Please refresh the page.');
       })
       .finally(() => {
-        if (!cancelled) setLoadingInstitutions(false);
+        if (!cancelled) setLoadingCampuses(false);
       });
 
     return () => { cancelled = true; };
@@ -657,8 +657,8 @@ export default function LeadPage() {
                           transition={{ duration: 0.25 }}
                           className="space-y-4"
                         >
-                          <SelectField id="institutionId" label="Institution" required value={formData.institutionId} onChange={handleChange} options={institutionOptions} placeholder={loadingInstitutions ? 'Loading…' : 'Select institution'} disabled={loadingInstitutions} loading={loadingInstitutions} />
-                          <SelectField id="degreeLevelId" label="Degree Level" required value={formData.degreeLevelId} onChange={handleChange} options={degreeLevelOptions} placeholder={loadingDegreeLevels ? 'Loading…' : 'Select degree level'} disabled={!formData.institutionId || loadingDegreeLevels} loading={loadingDegreeLevels} />
+                          <SelectField id="institutionId" label="Campus" required value={formData.institutionId} onChange={handleChange} options={institutionOptions} placeholder={loadingCampuses ? 'Loading…' : 'Select Campus'} disabled={loadingCampuses} loading={loadingCampuses} />
+                          <SelectField id="degreeLevelId" label="Study Level" required value={formData.degreeLevelId} onChange={handleChange} options={degreeLevelOptions} placeholder={loadingDegreeLevels ? 'Loading…' : 'Select Study Level'} disabled={!formData.institutionId || loadingDegreeLevels} loading={loadingDegreeLevels} />
                           <SelectField id="programId" label="Program" required value={formData.programId} onChange={handleChange} options={programOptions} placeholder={loadingPrograms ? 'Loading…' : 'Select program'} disabled={!formData.degreeLevelId || loadingPrograms} loading={loadingPrograms} />
 
                           {/* Admission Cycle */}

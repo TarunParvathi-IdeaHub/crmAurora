@@ -184,14 +184,22 @@ export default function ProgramFeeManagementPage() {
           | { institutions?: Institution[] }
           | null;
 
-        if (!response.ok) {
+        console.log("loadInstitutions response", {
+          status: response.status,
+          ok: response.ok,
+          data,
+        });
+
+        if (!response.ok && response.status !== 304) {
+          setError("Unable to load institutions.");
           return;
         }
 
         const list = (data?.institutions ?? []).filter((institution) => institution.isActive !== false);
         setInstitutions(list);
         setSelectedInstitutionId((current) => current || list[0]?.id || "");
-      } catch {
+      } catch (error) {
+        console.error("loadInstitutions failed", error);
         setError("Unable to load institutions.");
       }
     };
@@ -242,7 +250,7 @@ export default function ProgramFeeManagementPage() {
         ]);
 
         const programData = (await programResponse.json().catch(() => null)) as
-          | Array<{ id: string; programName: string; programSname: string; level?: { id?: string; levelName?: string } }>
+          | { programmes?: Array<{ id: string; programName: string; programSname: string; level?: { id?: string; levelName?: string } }> }
           | null;
         const batchData = (await batchResponse.json().catch(() => null)) as
           | { batches?: BatchOption[] }
@@ -251,9 +259,23 @@ export default function ProgramFeeManagementPage() {
           | { programTuitionFees?: RawTuitionFeeRow[] }
           | null;
 
+        console.log("loadInstitutionData response", {
+          selectedInstitutionId,
+          programResponseStatus: programResponse.status,
+          batchResponseStatus: batchResponse.status,
+          feeResponseStatus: feeResponse.status,
+          programData,
+          batchData,
+          feeData,
+        });
+
         if (cancelled) return;
 
-        if (!programResponse.ok || !batchResponse.ok || !feeResponse.ok) {
+        const isProgramResponseOk = programResponse.ok || programResponse.status === 304;
+        const isBatchResponseOk = batchResponse.ok || batchResponse.status === 304;
+        const isFeeResponseOk = feeResponse.ok || feeResponse.status === 304;
+
+        if (!isProgramResponseOk || !isBatchResponseOk || !isFeeResponseOk) {
           setError(
             (feeData as { error?: string } | null)?.error ||
               (batchData as { error?: string } | null)?.error ||
@@ -265,8 +287,13 @@ export default function ProgramFeeManagementPage() {
           return;
         }
 
+        const programmes = programData?.programmes ?? [];
+        if (!Array.isArray(programmes)) {
+          console.error("Expected programme list but got:", programData);
+        }
+
         setProgramOptions(
-          (programData ?? []).map((program) => ({
+          programmes.map((program) => ({
             id: program.id,
             programName: program.programName,
             programSname: program.programSname,

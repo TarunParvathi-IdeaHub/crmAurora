@@ -1,6 +1,23 @@
 // ── Application lifecycle ─────────────────────────────────────────────────────
 
 export type ApplicationStatus =
+  | "SAVED_AS_DRAFT"
+  | "APPLICATION_FEE_DUE"
+  | "APPLICATION_FEE_PAID"
+  | "APPLICATION_SUBMITTED"
+  | "AURUM_EXAM_PENDING"
+  | "AURUM_EXAM_PASSED"
+  | "AURUM_EXAM_FAILED"
+  | "DOCUMENT_VERIFICATION_PENDING"
+  | "DOCUMENT_VERIFIED"
+  | "DOCUMENT_VERIFICATION_FAILED"
+  | "REGISTRATION_FEE_DUE"
+  | "TUITION_FEE_DUE"
+  | "STUDENT_ADMISSION_UNDERTAKING_PENDING"
+  | "STUDENT_ADMISSION_UNDERTAKING_SUBMITTED"
+  | "ADMISSION_GRANTED"
+  | "ADMISSION_REJECTED"
+  // Legacy values retained for existing UI components during migration.
   | "DRAFT"
   | "PAYMENT_PENDING"
   | "PAYMENT_COMPLETED"
