@@ -18,6 +18,13 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
   const isDashboard = pathname === "/dashboard";
   const isFullWidthRoute = pathname === "/profile" || pathname === "/settings";
   const isChangePasswordRoute = pathname === "/change-password";
+  const isApplicantPage =
+    pathname.startsWith("/modules/crm/applicants/application") ||
+    pathname.startsWith("/modules/crm/applicants/aurum") ||
+    pathname.startsWith("/modules/crm/applicants/undertaking") ||
+    user?.role === "Applicant";
+  const isDocumentVerificationPage = pathname.includes("/modules/crm/admissions/document-verification");
+  const isScrollBasedOnContent = isApplicantPage || isDocumentVerificationPage;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -52,7 +59,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
 
         {isModulesRoute ? (
           // Modules layout handles its own sidebar via modules/layout.tsx
-          <div className="h-[calc(100vh-64px)] overflow-hidden">
+          <div className={isScrollBasedOnContent ? "min-h-[calc(100vh-64px)]" : "h-[calc(100vh-64px)] overflow-hidden"}>
             {children}
           </div>
         ) : isDashboard || isFullWidthRoute ? (

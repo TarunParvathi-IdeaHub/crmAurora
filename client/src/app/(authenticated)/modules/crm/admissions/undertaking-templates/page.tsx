@@ -223,46 +223,82 @@ export default function UndertakingTemplates() {
 
     const selectedIds = template.programmeIds ?? [];
     const institutionId = profile?.institution?.id;
+    const editMode = templates.some((t) => t.id === template.id);
 
     if (!institutionId) { setBuilderError("Institution not found. Please reload and try again."); return; }
     if (selectedIds.length === 0) { setBuilderError("Select at least one programme to save the template."); return; }
 
     setSaving(true);
-    const errors: string[] = [];
+    setBuilderError("");
 
-    for (const programId of selectedIds) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/undertaking-templates/create`, {
-          method: "POST",
+    try {
+      if (editMode) {
+        const res = await fetch(`${API_BASE_URL}/api/undertaking-templates/update`, {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            institutionId,
-            programId,
+            id: template.id,
             title: template.title.trim(),
             version: template.version.trim(),
             description: template.description?.trim() || undefined,
             content: template.content,
+            isActive: template.isActive,
+            programmeIds: selectedIds,
           }),
         });
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        if (!res.ok && res.status !== 409) {
-          const name = programmes.find((p) => p.id === programId)?.programName ?? programId;
-          errors.push(`${name}: ${data?.error ?? "Failed."}`);
+
+        const data = (await res.json().catch(() => null)) as { template?: ServerTemplate; error?: string } | null;
+        if (!res.ok) {
+          throw new Error(data?.error || "Failed to update template.");
         }
-      } catch {
-        errors.push(
-          `${programmes.find((p) => p.id === programId)?.programName ?? programId}: Network error.`
-        );
+
+        setSaveSuccess("Template updated successfully.");
+      } else {
+        const errors: string[] = [];
+
+        for (const programId of selectedIds) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/undertaking-templates/create`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                institutionId,
+                programId,
+                title: template.title.trim(),
+                version: template.version.trim(),
+                description: template.description?.trim() || undefined,
+                content: template.content,
+              }),
+            });
+            const data = (await res.json().catch(() => null)) as { error?: string } | null;
+            if (!res.ok && res.status !== 409) {
+              const name = programmes.find((p) => p.id === programId)?.programName ?? programId;
+              errors.push(`${name}: ${data?.error ?? "Failed."}`);
+            }
+          } catch {
+            errors.push(
+              `${programmes.find((p) => p.id === programId)?.programName ?? programId}: Network error.`
+            );
+          }
+        }
+
+        if (errors.length > 0) {
+          throw new Error(errors.join(" · "));
+        }
+
+        setSaveSuccess(`Saved for ${selectedIds.length} programme${selectedIds.length > 1 ? "s" : ""}.`);
       }
+    } catch (error) {
+      setBuilderError(error instanceof Error ? error.message : "Failed to save template.");
+      setSaving(false);
+      return;
     }
 
     setSaving(false);
-    if (errors.length > 0) { setBuilderError(errors.join(" · ")); return; }
-
     void fetchTemplates(programmes, institutionId);
 
-    setSaveSuccess(`Saved for ${selectedIds.length} programme${selectedIds.length > 1 ? "s" : ""}.`);
     setTimeout(() => { setViewMode("list"); setActiveTemplate(null); setSaveSuccess(""); }, 1500);
   }
 

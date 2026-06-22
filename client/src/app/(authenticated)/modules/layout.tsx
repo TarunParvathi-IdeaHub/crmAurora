@@ -86,9 +86,13 @@ export default function ModulesLayout({ children }: ModulesLayoutProps) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Only the multi-step application form is full-screen (no sidebar).
-  // Undertaking and fees pages use the standard ModuleSidebar.
-  const isApplicantPage = pathname.startsWith("/modules/crm/applicants/application");
+  const isApplicantPage =
+    pathname.startsWith("/modules/crm/applicants/application") ||
+    pathname.startsWith("/modules/crm/applicants/aurum") ||
+    pathname.startsWith("/modules/crm/applicants/undertaking") ||
+    role === "Applicant";
+  const isDocumentVerificationPage = pathname.includes("/modules/crm/admissions/document-verification");
+  const isScrollBasedOnContent = isApplicantPage || isDocumentVerificationPage;
 
   // Proximity-based sidebar expand/collapse
   useEffect(() => {
@@ -177,18 +181,28 @@ export default function ModulesLayout({ children }: ModulesLayoutProps) {
 
   return (
     <div className="bg-slate-50">
-      <div className="flex h-[calc(100vh-4rem)]">
+      <div className={isScrollBasedOnContent ? "flex min-h-[calc(100vh-4rem)]" : "flex h-[calc(100vh-4rem)]"}>
         {!isApplicantPage && <ModuleSidebar isExpanded={sidebarExpanded} />}
         <div
-          className="flex min-w-0 flex-1 flex-col min-h-0 overflow-auto"
+          className={
+            isScrollBasedOnContent
+              ? "flex min-w-0 flex-1 flex-col"
+              : "flex min-w-0 flex-1 flex-col min-h-0 overflow-auto"
+          }
           style={{
             paddingLeft: mainPaddingLeft,
             transition: isDesktop ? "padding-left 300ms ease-in-out" : undefined,
           }}
         >
-          <ModuleMainContent title="hi" subtitle="hello">
-            {children}
-          </ModuleMainContent>
+          {isScrollBasedOnContent ? (
+            <main className="flex-1 px-6 md:px-8 pt-6 md:pt-8 pb-4">
+              {children}
+            </main>
+          ) : (
+            <ModuleMainContent title="hi" subtitle="hello">
+              {children}
+            </ModuleMainContent>
+          )}
         </div>
       </div>
     </div>

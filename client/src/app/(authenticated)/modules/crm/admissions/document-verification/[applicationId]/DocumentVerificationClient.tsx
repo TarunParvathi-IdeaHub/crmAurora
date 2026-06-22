@@ -391,7 +391,7 @@ export default function DocumentVerificationClient({ applicationId }: Props) {
 
   if (role && !isAllowedRole) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[calc(100vh-12rem)]">
         <div className="text-center">
           <ShieldCheck size={40} className="mx-auto text-slate-300 mb-3" />
           <p className="text-slate-500">You do not have permission to access this page.</p>
@@ -404,7 +404,7 @@ export default function DocumentVerificationClient({ applicationId }: Props) {
 
   if (pageLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="flex items-center justify-center min-h-[calc(100vh-12rem)]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 size={32} className="animate-spin text-blue-500" />
           <p className="text-sm text-slate-500">Loading verification data…</p>
@@ -417,7 +417,7 @@ export default function DocumentVerificationClient({ applicationId }: Props) {
 
   if (pageError || !appInfo || !documents) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="flex items-center justify-center min-h-[calc(100vh-12rem)]">
         <div className="flex flex-col items-center gap-4 max-w-sm text-center">
           <div className="rounded-full bg-rose-50 p-4">
             <AlertCircle size={28} className="text-rose-500" />
@@ -444,7 +444,7 @@ export default function DocumentVerificationClient({ applicationId }: Props) {
   if (submitted) {
     const allVerified = verification?.status === "DOCUMENTS_VERIFIED";
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="flex items-center justify-center min-h-[calc(100vh-12rem)]">
         <div className="flex flex-col items-center gap-5 max-w-sm text-center bg-white rounded-2xl border border-slate-200 p-10 shadow-sm">
           <div className={`rounded-full p-4 ${allVerified ? "bg-emerald-50" : "bg-amber-50"}`}>
             {allVerified
@@ -487,7 +487,7 @@ export default function DocumentVerificationClient({ applicationId }: Props) {
   // ── Render: main page ─────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50">
+    <div className="flex flex-col">
 
       {/* ── Sticky header ──────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-slate-200 shadow-sm">

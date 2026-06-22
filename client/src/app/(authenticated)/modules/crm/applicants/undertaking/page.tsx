@@ -72,6 +72,91 @@ function collectCheckboxIds(content: UndertakingTemplateContent): string[] {
   return ids;
 }
 
+// ── Undertaking access rules ──────────────────────────────────────────────────
+// Statuses where the undertaking is accessible (pending to submit OR already submitted).
+// Once a status reaches any of these values the undertaking must NEVER show as locked.
+
+export const UNDERTAKING_ACCESSIBLE_STATUSES = new Set([
+  "STUDENT_ADMISSION_UNDERTAKING_PENDING",
+  "STUDENT_ADMISSION_UNDERTAKING_SUBMITTED",
+  "REGISTRATION_FEE_DUE",
+  "REGISTRATION_FEE_PAID",
+  "TUITION_FEE_DUE",
+  "TUITION_FEE_PAID",
+  "ADMISSION_GRANTED",
+  "ADMISSION_REJECTED",
+]);
+
+// ── Status banner metadata (post-submission) ──────────────────────────────────
+
+type StatusMeta = {
+  message: string;
+  statusLabel: string;
+  badgeClass: string;
+  dotClass: string;
+  action?: { label: string; path: string };
+};
+
+function getPostSubmissionMeta(status: string): StatusMeta {
+  switch (status) {
+    case "REGISTRATION_FEE_DUE":
+      return {
+        message: "Your undertaking has been submitted successfully. Please complete the pending Registration Fee payment to proceed with admission.",
+        statusLabel: "Registration Fee Due",
+        badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+        dotClass: "bg-amber-500",
+        action: { label: "Pay Now", path: "/modules/crm/applicants/fees/pending" },
+      };
+    case "REGISTRATION_FEE_PAID":
+      return {
+        message: "Your Registration Fee has been paid. Your Tuition Fee invoice will be generated shortly.",
+        statusLabel: "Registration Fee Paid",
+        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        dotClass: "bg-emerald-500",
+        action: { label: "View Payments", path: "/modules/crm/applicants/fees/pending" },
+      };
+    case "TUITION_FEE_DUE":
+      return {
+        message: "Registration Fee paid. Please complete your Tuition Fee payment to finalise your admission.",
+        statusLabel: "Tuition Fee Due",
+        badgeClass: "border-violet-200 bg-violet-50 text-violet-700",
+        dotClass: "bg-violet-500",
+        action: { label: "Pay Now", path: "/modules/crm/applicants/fees/pending" },
+      };
+    case "TUITION_FEE_PAID":
+      return {
+        message: "Both Registration and Tuition Fees have been paid. Your admission is being finalised.",
+        statusLabel: "Tuition Fee Paid",
+        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        dotClass: "bg-emerald-500",
+        action: { label: "View Receipts", path: "/modules/crm/applicants/fees/receipts" },
+      };
+    case "ADMISSION_GRANTED":
+      return {
+        message: "Congratulations! Your admission has been granted. Welcome to the institution.",
+        statusLabel: "Admission Granted",
+        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        dotClass: "bg-emerald-500",
+      };
+    case "ADMISSION_REJECTED":
+      return {
+        message: "Your admission application was not approved at this time.",
+        statusLabel: "Admission Rejected",
+        badgeClass: "border-rose-200 bg-rose-50 text-rose-700",
+        dotClass: "bg-rose-500",
+      };
+    case "STUDENT_ADMISSION_UNDERTAKING_SUBMITTED":
+    default:
+      return {
+        message: "Your undertaking has been accepted. Your Registration Fee and Tuition Fee invoices have been generated.",
+        statusLabel: "Undertaking Submitted",
+        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        dotClass: "bg-emerald-500",
+        action: { label: "View Fees", path: "/modules/crm/applicants/fees/pending" },
+      };
+  }
+}
+
 // ── Rendered Template View ────────────────────────────────────────────────────
 
 interface TemplateViewProps {
@@ -224,14 +309,27 @@ export default function UndertakingPage() {
   // Application status from render response
   const applicationStatus = renderData?.studentInfo?.applicationStatus ?? "";
   const normalizedApplicationStatus = applicationStatus.trim().toUpperCase().replace(/\s+/g, "_");
-  const isUndertakingPending = normalizedApplicationStatus === "STUDENT_ADMISSION_UNDERTAKING_PENDING";
-  const isAlreadySubmitted = normalizedApplicationStatus === "STUDENT_ADMISSION_UNDERTAKING_SUBMITTED";
-  const isDocumentVerified = normalizedApplicationStatus === "DOCUMENT_VERIFIED";
-  const hasFixedTuitionFee = Boolean(renderData?.tuitionFeeInfo);
-  const canAcceptUndertaking = isUndertakingPending || (isDocumentVerified && hasFixedTuitionFee);
+  console.log("Normalized Application Status:", normalizedApplicationStatus);
+  console.log("Application Status:", applicationStatus);
+  console.log("Student Info:", renderData?.studentInfo);
 
-  // Locked once accepted
-  const isLocked = isAlreadySubmitted || submitted;
+
+  const isUndertakingPending   = normalizedApplicationStatus === "STUDENT_ADMISSION_UNDERTAKING_PENDING";
+  const isAlreadySubmitted     = normalizedApplicationStatus === "STUDENT_ADMISSION_UNDERTAKING_SUBMITTED";
+  const isDocumentVerified     = normalizedApplicationStatus === "DOCUMENT_VERIFIED";
+  const hasFixedTuitionFee     = Boolean(renderData?.tuitionFeeInfo);
+
+  // canAcceptUndertaking — the applicant can still fill in and submit the form
+  const canAcceptUndertaking   = isUndertakingPending || (isDocumentVerified && hasFixedTuitionFee);
+
+  // canAccessUndertaking — undertaking page should show content (submitted read-only view)
+  const canAccessUndertaking   = UNDERTAKING_ACCESSIBLE_STATUSES.has(normalizedApplicationStatus);
+
+  // isPostSubmission — undertaking already submitted; show read-only view + status banner
+  const isPostSubmission       = canAccessUndertaking && !canAcceptUndertaking;
+
+  // isLocked — template checkboxes are non-interactive
+  const isLocked               = isAlreadySubmitted || submitted || isPostSubmission;
 
   // All checkboxes must be checked to enable submit
   const allChecked = allCheckboxIds.length > 0 && allCheckboxIds.every((id) => checkedBoxes.has(id));
@@ -279,10 +377,9 @@ export default function UndertakingPage() {
       const checkboxIds = collectCheckboxIds(data.content);
       setAllCheckboxIds(checkboxIds);
 
-      // If already accepted, pre-check all boxes (display-only)
-      if (
-        data.studentInfo.applicationStatus === "STUDENT_ADMISSION_UNDERTAKING_SUBMITTED"
-      ) {
+      // Pre-check all boxes for any post-submission status (read-only display)
+      if (UNDERTAKING_ACCESSIBLE_STATUSES.has(data.studentInfo.applicationStatus) &&
+          data.studentInfo.applicationStatus !== "STUDENT_ADMISSION_UNDERTAKING_PENDING") {
         setCheckedBoxes(new Set(checkboxIds));
       }
     } catch {
@@ -435,8 +532,8 @@ export default function UndertakingPage() {
         </motion.div>
       )}
 
-      {/* Not available yet */}
-      {!loading && !error && !canAcceptUndertaking && !isAlreadySubmitted && !submitted && (
+      {/* ── Undertaking locked (pre-undertaking statuses only) ─────────────── */}
+      {!loading && !error && !canAcceptUndertaking && !canAccessUndertaking && !submitted && (
         <motion.div variants={slideItem}>
           <div className="flex items-start gap-4 rounded-2xl border border-slate-200 bg-slate-100 p-5">
             <Lock size={22} className="mt-0.5 shrink-0 text-slate-500" />
@@ -454,29 +551,39 @@ export default function UndertakingPage() {
         </motion.div>
       )}
 
-      {/* Already submitted banner */}
-      {!loading && !error && (isAlreadySubmitted || submitted) && (
-        <motion.div variants={slideItem}>
-          <div className="flex items-start gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-            <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-emerald-600" />
-            <div>
-              <p className="font-semibold text-emerald-800">Undertaking accepted successfully!</p>
-              <p className="mt-1 text-sm text-emerald-700">
-                Your Registration Fee and Tuition Fee invoices have been generated.{" "}
-                {submitted && "Redirecting to Pending Payments..."}
-              </p>
+      {/* ── Post-submission status banner (unified for all submitted states) ─ */}
+      {!loading && !error && (isPostSubmission || isAlreadySubmitted || submitted) && (() => {
+        const meta = getPostSubmissionMeta(
+          submitted ? "STUDENT_ADMISSION_UNDERTAKING_SUBMITTED" : normalizedApplicationStatus
+        );
+        return (
+          <motion.div variants={slideItem}>
+            <div className="flex items-start gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+              <CheckCircle2 size={22} className="mt-0.5 shrink-0 text-emerald-600" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-emerald-800">Undertaking Submitted Successfully</p>
+                <p className="mt-1 text-sm text-emerald-700">
+                  {submitted ? "Redirecting to Pending Payments..." : meta.message}
+                </p>
+                {!submitted && (
+                  <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${meta.badgeClass}`}>
+                    <span className={`h-2 w-2 rounded-full ${meta.dotClass}`} />
+                    {meta.statusLabel}
+                  </div>
+                )}
+              </div>
+              {!submitted && meta.action && (
+                <button
+                  onClick={() => router.push(meta.action!.path)}
+                  className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition"
+                >
+                  {meta.action.label} <ChevronRight size={14} />
+                </button>
+              )}
             </div>
-            {!submitted && (
-              <button
-                onClick={() => router.push("/modules/crm/applicants/fees/pending")}
-                className="ml-auto shrink-0 inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition"
-              >
-                View Fees <ChevronRight size={14} />
-              </button>
-            )}
-          </div>
-        </motion.div>
-      )}
+          </motion.div>
+        );
+      })()}
 
       {/* Tuition fee info card (shown when pending) */}
       {!loading && !error && canAcceptUndertaking && renderData?.tuitionFeeInfo && (
@@ -520,7 +627,7 @@ export default function UndertakingPage() {
       )}
 
       {/* Undertaking Template */}
-      {!loading && !error && renderData && (canAcceptUndertaking || isAlreadySubmitted || submitted) && (
+      {!loading && !error && renderData && (canAcceptUndertaking || canAccessUndertaking || submitted) && (
         <motion.div variants={slideItem}>
           <Card className="p-6">
             <div className="mb-4 flex items-center justify-between">
