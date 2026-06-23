@@ -83,11 +83,11 @@ export async function rejectApplicant(
   return json;
 }
 
-export async function fetchMyAdmissionDetails(): Promise<{
+export async function fetchMyAdmissionDetails(applicationId: string): Promise<{
   data?: MyAdmissionDetails;
   error?: string;
 }> {
-  const res = await fetch(`${API_BASE}/api/admissions/my-admission-details`, {
+  const res = await fetch(`${API_BASE}/api/admissions/my-admission-details/${applicationId}`, {
     credentials: "include",
   });
   const json = (await res.json()) as { data?: MyAdmissionDetails; error?: string };
