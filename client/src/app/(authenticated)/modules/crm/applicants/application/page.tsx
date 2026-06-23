@@ -1753,13 +1753,6 @@ function AdmissionDecisionView({
             <InfoTile label="Programme" value={details.program?.programName ?? "—"} accent="emerald" />
             <InfoTile label="Degree Level" value={details.degreeLevel?.levelName ?? "—"} accent="emerald" />
             <InfoTile label="Batch" value={details.batch?.batchName ?? "Pending Batch Assignment"} accent="emerald" />
-            <InfoTile label="Admission Cycle" value={details.admissionCycle?.admissionCycleName ?? "—"} accent="emerald" />
-            <InfoTile
-              label="Student ID"
-              value={details.studentId ?? "Being Generated"}
-              accent="emerald"
-              highlight
-            />
           </div>
         )}
 
