@@ -1439,6 +1439,7 @@ function ApplicationPage() {
           applicationNumber={applicationNumber}
           institutionName={institutionName}
           applicantName={applicantName}
+          applicationId={applicationId}
         />
       );
     }
@@ -1648,11 +1649,13 @@ function AdmissionDecisionView({
   applicationNumber,
   institutionName,
   applicantName,
+  applicationId,
 }: {
   applicationStatus: string;
   applicationNumber: string | null;
   institutionName: string;
   applicantName: string;
+  applicationId: string;
 }) {
   const [details, setDetails] = useState<MyAdmissionDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1663,7 +1666,7 @@ function AdmissionDecisionView({
     setLoading(true);
     setFetchError("");
 
-    fetchMyAdmissionDetails()
+    fetchMyAdmissionDetails(applicationId)
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) setFetchError(error);
@@ -1677,7 +1680,7 @@ function AdmissionDecisionView({
       });
 
     return () => { cancelled = true; };
-  }, []);
+  }, [applicationId]);
 
   const isGranted = applicationStatus === "ADMISSION_GRANTED";
 
