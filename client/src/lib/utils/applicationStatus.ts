@@ -39,7 +39,7 @@ export function getLockedStatusMessage(status: string | null | undefined): strin
       return "Your documents are under verification.";
     case "DOCUMENT_VERIFIED":
       return "Your documents have been successfully verified.";
-    case "DOCUMENT_VERIFICATION_FAILED":
+    case "DOCUMENT_VERIFICATION_INCOMPLETE":
       return "Document verification requires attention.";
     case "REGISTRATION_FEE_DUE":
       return "Registration fee payment is pending.";
@@ -71,7 +71,7 @@ export function getApplicationStatusTone(status: string | null | undefined): {
         dotClass: "bg-emerald-500",
       };
     case "ADMISSION_REJECTED":
-    case "DOCUMENT_VERIFICATION_FAILED":
+    case "DOCUMENT_VERIFICATION_INCOMPLETE":
     case "AURUM_EXAM_FAILED":
       return {
         badgeClass: "border-rose-200 bg-rose-50 text-rose-700",

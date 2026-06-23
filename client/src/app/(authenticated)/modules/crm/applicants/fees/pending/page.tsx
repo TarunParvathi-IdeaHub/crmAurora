@@ -376,7 +376,7 @@ function PendingPaymentsContent() {
           <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <Lock size={18} className="text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-amber-800">Registration Fee must be paid first</p>
+              <p className="font-semibold text-amber-800">Registration Fee to be paid first</p>
               <p className="text-sm text-amber-700 mt-0.5">
                 Please complete your Registration Fee payment before proceeding to other fees.
                 Other fee payments are locked until the Registration Fee is fully paid.

@@ -66,7 +66,7 @@ type ApplicationStatus =
   | "AURUM_EXAM_FAILED"
   | "DOCUMENT_VERIFICATION_PENDING"
   | "DOCUMENT_VERIFIED"
-  | "DOCUMENT_VERIFICATION_FAILED"
+  | "DOCUMENT_VERIFICATION_INCOMPLETE"
   | "REGISTRATION_FEE_DUE"
   | "TUITION_FEE_DUE"
   | "STUDENT_ADMISSION_UNDERTAKING_PENDING"
@@ -128,7 +128,7 @@ const STATUS_META: Partial<
 > = {
   DOCUMENT_VERIFICATION_PENDING:  { label: "Docs Pending",   className: "bg-amber-50 text-amber-700 border border-amber-200"     },
   DOCUMENT_VERIFIED:              { label: "Docs Verified",  className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
-  DOCUMENT_VERIFICATION_FAILED:   { label: "Docs Failed",    className: "bg-rose-50 text-rose-700 border border-rose-200"         },
+  DOCUMENT_VERIFICATION_INCOMPLETE:   { label: "Docs Incomplete",    className: "bg-rose-50 text-rose-700 border border-rose-200"         },
   APPLICATION_SUBMITTED:          { label: "Submitted",      className: "bg-indigo-50 text-indigo-700 border border-indigo-200"   },
   AURUM_EXAM_PASSED:              { label: "Exam Passed",    className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
 };
@@ -366,7 +366,7 @@ export default function DocumentVerificationClient({ applicationId }: Props) {
             ? {
                 ...prev,
                 applicationStatus: hasRejected
-                  ? "DOCUMENT_VERIFICATION_FAILED"
+                  ? "DOCUMENT_VERIFICATION_INCOMPLETE"
                   : "DOCUMENT_VERIFIED",
               }
             : prev,

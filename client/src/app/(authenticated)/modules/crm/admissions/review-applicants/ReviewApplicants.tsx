@@ -63,7 +63,7 @@ type ApplicationStatus =
   | "AURUM_EXAM_FAILED"
   | "DOCUMENT_VERIFICATION_PENDING"
   | "DOCUMENT_VERIFIED"
-  | "DOCUMENT_VERIFICATION_FAILED"
+  | "DOCUMENT_VERIFICATION_INCOMPLETE"
   | "REGISTRATION_FEE_DUE"
   | "TUITION_FEE_DUE"
   | "STUDENT_ADMISSION_UNDERTAKING_PENDING"
@@ -294,7 +294,7 @@ const STATUS_META: Record<
   AURUM_EXAM_FAILED:                       { label: "Exam Failed",                  className: "bg-rose-50 text-rose-700 border-rose-200",        icon: "fail"    },
   DOCUMENT_VERIFICATION_PENDING:           { label: "Docs Pending",                 className: "bg-amber-50 text-amber-700 border-amber-200",     icon: "pending" },
   DOCUMENT_VERIFIED:                       { label: "Docs Verified",                className: "bg-emerald-50 text-emerald-700 border-emerald-200",icon: "ok"      },
-  DOCUMENT_VERIFICATION_FAILED:            { label: "Docs Failed",                  className: "bg-rose-50 text-rose-700 border-rose-200",        icon: "fail"    },
+  DOCUMENT_VERIFICATION_INCOMPLETE:        { label: "Docs Incomplete",              className: "bg-rose-50 text-rose-700 border-rose-200",        icon: "fail"    },
   REGISTRATION_FEE_DUE:                    { label: "Reg. Fee Due",                 className: "bg-amber-50 text-amber-700 border-amber-200",     icon: "pending" },
   TUITION_FEE_DUE:                         { label: "Tuition Fee Due",              className: "bg-amber-50 text-amber-700 border-amber-200",     icon: "pending" },
   STUDENT_ADMISSION_UNDERTAKING_PENDING:   { label: "Undertaking Pending",          className: "bg-amber-50 text-amber-700 border-amber-200",     icon: "pending" },
